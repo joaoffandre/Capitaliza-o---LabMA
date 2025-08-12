@@ -1,0 +1,207 @@
+---
+title: "Capital Segurado Previsto - Resgate"
+author: "João Francisco"
+date: "2025-08-12"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    highlight: tango
+    fig_width: 5
+    fig_height: 4
+    css: "Estilos/estilos.css"
+---
+
+```{r, include=FALSE}
+# Carregando os pacotes
+library(arrow)
+library(data.table)
+library(dplyr)
+library(tidyverse)
+library(plotly)
+library(survival)
+library(ggsurvfit)
+library(flextable)
+library(DT)
+library(survminer)
+library(gridExtra)
+library(officer)
+library(knitr)
+
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo = FALSE, fig.align = 'left')
+
+# Carregando a base de dados
+base <- read_rds('../../Bases/capitalizacao_tratada.rds')
+
+base_resgate <- base %>%
+  filter(status == "Resgate") %>%
+  select(-status)
+
+
+# Função
+tx.emp <- function(t, s, cat) {
+  seq_time <- 1:length(t)
+  
+  aux <- NULL
+  
+  for (i in 2:length(seq_time)) {
+    aux <- c(aux, 
+             (s[seq_time[i - 1]] - s[seq_time[i]]) /
+               ((t[seq_time[i]] - t[seq_time[i - 1]]) * s[seq_time[i - 1]]))
+  }
+  
+  return(bind_rows(tibble(time = 0, hazard = 0, strata = cat),
+                   tibble(time = t[-1], hazard = aux,
+                          strata = cat)))
+}
+```
+
+```{r}
+# Estatísticas resumo para toda a coluna
+resumo_geral <- summary(base_resgate$capitalSeguradoPrevisto)
+resumo_geral_df <- data.frame(Estatística = names(resumo_geral), Valor = as.vector(resumo_geral))
+
+# Função para criar flextable estilizada
+criar_flextable <- function(df, titulo) {
+  ft <- flextable(df)
+  ft <- theme_vanilla(ft)
+  ft <- set_header_labels(ft, Est = names(df)[1], Val = names(df)[2])
+  ft <- autofit(ft)
+  ft <- bg(ft, bg = "#f7f7f7", part = "header")
+  ft <- bold(ft, part = "header")
+  ft <- fontsize(ft, size = 12, part = "all")
+  ft <- fontsize(ft, size = 11, part = "body")
+  ft <- color(ft, color = "#2C3E50", part = "all")
+  ft <- align(ft, align = "center", part = "all")
+  ft <- padding(ft, padding = 5, part = "all")
+  ft <- add_header_lines(ft, values = titulo)
+  ft
+}
+```
+
+# Resumos {.tabset .tabset-fade .tabset-pills}
+
+## Resumo Geral do Capital Segurado Previsto
+```{r}
+# Exibir as tabelas
+criar_flextable(resumo_geral_df, "Resumo Geral do Capital Segurado Previsto")
+```
+
+# Histograma
+```{r fig.width=10, fig.height=6}
+par(mfrow = c(1, 2))
+
+# Histograma sem transformação
+hist(base_resgate$capitalSeguradoPrevisto, breaks = 50, main = "Histograma (sem log)", 
+     xlab = "Capital Segurado Previsto", col = "skyblue")
+
+# Histograma com log1p
+hist(log1p(base_resgate$capitalSeguradoPrevisto), breaks = 50, main = "Histograma (log(1 + x))", 
+     xlab = "log(1 + Capital Segurado Previsto)", col = "salmon")
+```
+
+# Boxplot
+```{r fig.width=10, fig.height=6}
+par(mfrow = c(1, 2))
+
+boxplot(base_resgate$capitalSeguradoPrevisto, 
+        main = "Boxplot Capital Segurado", 
+        ylab = "Capital Segurado Previsto", col = "skyblue")
+
+boxplot(base_resgate$capitalSeguradoPrevisto, 
+        main = "Boxplot Capital Segurado \n Sem Outlier", 
+        ylab = "Capital Segurado Previsto", 
+        col = "lightblue", outline = FALSE)
+```
+
+```{r fig.width=10, fig.height=6}
+par(mfrow = c(1, 2))
+
+boxplot(log1p(base_resgate$capitalSeguradoPrevisto), 
+        main = "Boxplot log(1 + Capital Segurado)", 
+        ylab = "log(1 + Capital Segurado Previsto)", col = "salmon")
+
+boxplot(log1p(base_resgate$capitalSeguradoPrevisto), 
+        main = "Boxplot log(1 + Capital Segurado) \n Sem Outlier", 
+        ylab = "log(1 + Capital Segurado Previsto)", 
+        col = "salmon", outline = FALSE)
+```
+
+# Persistência
+- Baixo (0% a 30%)  
+- Médio (30% a 70%)  
+- Alto (70% a 100%)  
+
+```{r fig.width=10, fig.height=6}
+# Criar o resumo estatístico por faixa
+quartis <- quantile(base_resgate$capitalSeguradoPrevisto, probs = c(0, 0.3, 0.7, 1), na.rm = TRUE)
+
+base_resgate$faixaCapitalSeguradoPrevisto <- cut(base_resgate$capitalSeguradoPrevisto,
+                                         breaks = quartis,
+                                         labels = c("Baixo", "Medio", "Alto"),
+                                         include.lowest = TRUE)
+
+resumo_por_faixa <- base_resgate |>
+  group_by(faixaCapitalSeguradoPrevisto) |>
+  summarise(
+    Minimo = min(capitalSeguradoPrevisto, na.rm = TRUE),
+    Maximo = max(capitalSeguradoPrevisto, na.rm = TRUE),
+    Media = mean(capitalSeguradoPrevisto, na.rm = TRUE),
+    Mediana = median(capitalSeguradoPrevisto, na.rm = TRUE),
+    Quantidade = n()
+  ) |>
+  ungroup()
+
+format_real <- function(x) {
+  scales::dollar(x,
+                 accuracy = 0.01,
+                 prefix = "R$ ",
+                 big.mark = ".",
+                 decimal.mark = ",")
+}
+
+resumo_por_faixa_formatado <- resumo_por_faixa |>
+  mutate(
+    Minimo = format_real(Minimo),
+    Maximo = format_real(Maximo),
+    Media = format_real(Media),
+    Mediana = format_real(Mediana)
+  )
+
+criar_flextable(resumo_por_faixa_formatado, 
+                titulo = "Resumo Estatistico do Capital Segurado Previsto por Faixa")
+
+# Gráficos
+km = survfit2(Surv(tempo_mes, delta) ~ faixaCapitalSeguradoPrevisto, data = base_resgate)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p = ggplot(base_resgate) + theme_classic()
+
+p1 = p +
+  geom_step(aes(x = time, y = estimate, color = strata), data = km_surv) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1))
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata, levels = unique(km_surv$strata))
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) +
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
