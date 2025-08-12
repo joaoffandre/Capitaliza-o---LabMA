@@ -243,42 +243,30 @@ base_resgate <- read_parquet("../Bases/base_resgate_clusters_variaveis.parquet")
 
 # Criar permutações dos clusters
 base_resgate <- base_resgate |>
-  mutate(combinação = paste0(clusterCC, '-', clusterFC, '-', clusterTC))
+  mutate(combinação = paste0(clusterCC, '-', clusterFC3, '-', clusterTC))
 
 # Agrupando combinações que possuem funções de risco parecidas:
-# 1-4-1 e 2-4-1 viram 5-5-5 (Outros1)
-# 1-2-2 e 2-2-2 viram 6-6-6 (Outros2)
-# 1-3-1, 1-3-2, 2-1-2, 2-3-1 e 2-3-2 viram 7-7-7 (Outros3)
-base_resgate <- base_resgate |>
-  mutate(combinação_agrupada = case_when(
-    combinação %in% c('1-4-1', '2-4-1') ~ '5-5-5', # Outros1
-    combinação %in% c('1-2-2', '2-2-2') ~ '6-6-6', # Outros2
-    combinação %in% c('1-3-1', '1-3-2', '2-1-2', '2-3-1', '2-3-2') ~ '7-7-7', # Outros3
-    TRUE ~ combinação)) |>
-  mutate(combinação_agrupada = factor(combinação_agrupada))
+
 
 # Unir as combinações agrupadas ao conjunto de dados originais
-base_resgate <- base_resgate |>
-  mutate(clusterCC = case_when(
-    combinação_agrupada == '5-5-5' ~ '5',
-    combinação_agrupada == '6-6-6' ~ '6',
-    combinação_agrupada == '7-7-7' ~ '7',
-    TRUE ~ as.character(clusterCC)),
-  clusterFC = case_when(
-    combinação_agrupada == '5-5-5' ~ '5',
-    combinação_agrupada == '6-6-6' ~ '6',
-    combinação_agrupada == '7-7-7' ~ '7',
-    TRUE ~ as.character(clusterFC)),
-  clusterTC = case_when(
-    combinação_agrupada == '5-5-5' ~ '5',
-    combinação_agrupada == '6-6-6' ~ '6',
-    combinação_agrupada == '7-7-7' ~ '7',
-    TRUE ~ as.character(clusterTC))) |>
-  mutate(clusterCC = as.factor(clusterCC),
-         clusterFC = as.factor(clusterFC),
-         clusterTC = as.factor(clusterTC))
 
-km_surv <- survfit2(Surv(tempo_mes, delta1) ~ clusterCC + clusterFC + clusterTC,
+base_resgate <- base_resgate |>
+  mutate(combinação_agrupada = case_when(
+    combinação %in% c('1-3-1', '2-3-1') ~ '5-5-5', # Grupo 5
+    combinação %in% c('1-2-2', '2-2-2') ~ '6-6-6', # Grupo 6
+    combinação %in% c('1-1-1', '1-1-2', '2-1-2') ~ '7-7-7', # Grupo 7
+    TRUE ~ combinação
+  )) |>
+  mutate(
+    clusterCC = ifelse(combinação_agrupada %in% c('5-5-5','6-6-6','7-7-7'),
+                       substr(combinação_agrupada,1,1), as.character(clusterCC)),
+    clusterFC3 = ifelse(combinação_agrupada %in% c('5-5-5','6-6-6','7-7-7'),
+                        substr(combinação_agrupada,3,3), as.character(clusterFC3)),
+    clusterTC = ifelse(combinação_agrupada %in% c('5-5-5','6-6-6','7-7-7'),
+                       substr(combinação_agrupada,5,5), as.character(clusterTC))
+  )
+
+km_surv <- survfit2(Surv(tempo_mes, delta1) ~ clusterCC + clusterFC3 + clusterTC,
                     data = base_resgate) |> 
   tidy_survfit()
 
