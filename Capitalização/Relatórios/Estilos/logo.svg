@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Creator: CorelDRAW 2020 (64-Bit) -->
+<svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" width="105mm" height="65mm" version="1.1" style="shape-rendering:geometricPrecision; text-rendering:geometricPrecision; image-rendering:optimizeQuality; fill-rule:evenodd; clip-rule:evenodd"
+viewBox="0 0 10500 6500"
+ xmlns:xlink="http://www.w3.org/1999/xlink"
+ xmlns:xodm="http://www.corel.com/coreldraw/odm/2003">
+ <defs>
+  <style type="text/css">
+   <![CDATA[
+    .fil0 {fill:#143542}
+    .fil1 {fill:#5E737E}
+    .fil2 {fill:#829AA6}
+    .fil5 {fill:#A1C1CF}
+    .fil3 {fill:#A2C2D0}
+    .fil4 {fill:#E5EAED}
+   ]]>
+  </style>
+    <clipPath id="id0">
+     <path d="M506.35 1149.81l9688.96 0 0 4330.36 -9688.96 0 0 -4330.36z"/>
+    </clipPath>
+ </defs>
+ <g id="Layer_x0020_1">
+  <metadata id="CorelCorpID_0Corel-Layer"/>
+  <g id="_2904449363056">
+   <path class="fil0" d="M7492.2 5001.2l-1000 0c0,-552.28 447.72,-1000 1000,-1000l0 1000z"/>
+   <path class="fil1" d="M7992.2 5001.2l-1500 0c0,828.43 671.57,1500 1500,1500l0 -1500z"/>
+   <path class="fil2" d="M7992.2 4001.21l2500 0c0,1380.71 -1119.29,2500 -2500,2500l0 -2500z"/>
+   <path class="fil3" d="M6492.2 4001.21l4000 0c0,-2209.14 -1790.86,-4000 -4000,-4000l0 4000z"/>
+   <path class="fil4" d="M6492.2 6501.2l-6500 0c0,-3589.85 2910.15,-6500 6500,-6500l0 6500z"/>
+  </g>
+  <g id="_2904449360128">
+   <g style="clip-path:url(#id0)">
+    <image x="506.35" y="1149.81" width="9688.96" height="4330.36" xlink:href="logo_nova_Images\logo_nova_ImgID1.png"/>
+   </g>
+  </g>
+  <g id="_2904449359984">
+   <path class="fil0" d="M8174.97 2011.54l1086.2 0 0 362.07 -1086.2 0 0 -362.07zm-1665.53 -362.08l-289.65 0 0 1882.76 362.07 0 0 -1158.61 543.1 506.89 543.1 -506.89 0 1158.61 506.91 0 0 -724.14 1086.2 0 0 724.14 434.49 0 0 -1882.76 -1955.18 0 -615.52 651.73 -615.52 -651.73z"/>
+   <path class="fil1" d="M5133.57 3894.3l724.15 0 0 724.14 -724.15 0 0 -724.14zm1086.22 -434.49l-1086.22 0 0 -434.47 -362.05 0 0 1955.18 1448.27 0 0 -1520.71z"/>
+   <path class="fil1" d="M3250.81 4401.19l724.15 0 0 289.67 -724.15 0 0 -289.67zm-362.05 -506.89l1086.2 0 0 217.23 -1086.2 0 0 868.99 1520.69 0 0 -1448.3 -1520.69 0 0 362.08z"/>
+   <polygon class="fil1" points="1006,4980.52 2526.69,4980.52 2526.69,4618.44 1368.07,4618.44 1368.07,3170.15 1006,3170.15 "/>
+   <polygon class="fil5" points="8174.97,2373.61 9261.17,2373.61 9261.17,2011.54 8174.97,2011.54 "/>
+  </g>
+ </g>
+</svg>

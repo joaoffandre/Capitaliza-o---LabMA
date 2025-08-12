@@ -1,0 +1,855 @@
+---
+title: "Clusterização"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    highlight: tango
+    fig_width: 5
+    fig_height: 4
+    css: "Estilos/estilos.css"
+---
+
+```{r, include=FALSE}
+# Carregando os pacotes
+library(arrow)
+library(data.table)
+library(dplyr)
+library(tidyverse)
+library(plotly)
+library(survival)
+library(ggsurvfit)
+library(flextable)
+library(DT)
+library(survminer)
+library(gridExtra)
+library(officer)
+library(knitr)
+
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo = FALSE, fig.align = 'left')
+
+# Carregando a base de dados
+base <- read_parquet('../Bases/base_clusters.parquet')
+
+# Função
+tx.emp <- function(t, s, cat) {
+  seq_time <- 1:length(t)
+  
+  aux <- NULL
+  
+  for (i in 2:length(seq_time)) {
+    aux <- c(aux, 
+             (s[seq_time[i - 1]] - s[seq_time[i]]) /
+               ((t[seq_time[i]] - t[seq_time[i - 1]]) * s[seq_time[i - 1]]))
+  }
+  
+  return(bind_rows(tibble(time = 0, hazard = 0, strata = cat),
+                   tibble(time = t[-1], hazard = aux,
+                          strata = cat)))
+}
+```
+
+# Categoria do Cliente {.tabset .tabset-fade .tabset-pills}
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ categoriaCliente, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, color = strata)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata))  +
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
+
+## clusterCC
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ categoriaCliente, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+km_surv$clusterCC <- base$clusterCC[match(km_surv$strata, base$categoriaCliente)]
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, group = strata, color = clusterCC)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+pred_risk$clusterCC <- base$clusterCC[match(pred_risk$strata, base$categoriaCliente)]
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, group = strata, color = clusterCC))  +
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
+
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ clusterCC, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, color = strata)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata))  +
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
+
+```{r}
+tabela_contingencia <- table(base$categoriaCliente, base$clusterCC)
+
+df_tabela_contingencia <- as.data.frame(tabela_contingencia)
+
+colnames(df_tabela_contingencia) <- c("categoriaCliente", "clusterCC", "Frequência")
+
+# Calculando porcentagens
+df_tabela_contingencia <- df_tabela_contingencia |>
+  mutate(Porcentagem = sprintf("%.2f%%", (Frequência / sum(Frequência)) * 100)) |>
+  filter(Frequência > 0)
+
+# Criando a tabela interativa com DT
+DT::datatable(df_tabela_contingencia,
+          rownames = FALSE,
+          class = 'cell-border stripe hover',
+          options = list(paging = F,
+                         searching = F,
+                         info = F))
+```
+
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ clusterCC, data = base)
+
+nomes = c("1", "2")
+
+ggsurvplot(km, data = base, legend = "none", legend.labs = nomes, 
+           risk.table = TRUE, risk.table.height = 0.3)
+```
+
+# Ramo Descrição {.tabset .tabset-fade .tabset-pills}
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ ramoDescricao, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, color = strata)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata))  +
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
+
+## clusterRD1
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ ramoDescricao, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+km_surv$clusterRD1 <- base$clusterRD1[match(km_surv$strata, base$ramoDescricao)]
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, group = strata, color = clusterRD1)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+pred_risk$clusterRD1 <- base$clusterRD1[match(pred_risk$strata, base$ramoDescricao)]
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, group = strata, color = clusterRD1))  +
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
+
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ clusterRD1, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, color = strata)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata))  +
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
+
+```{r}
+tabela_contingencia <- table(base$ramoDescricao, base$clusterRD1)
+
+df_tabela_contingencia <- as.data.frame(tabela_contingencia)
+
+colnames(df_tabela_contingencia) <- c("ramoDescricao", "clusterRD1", "Frequência")
+
+# Calculando porcentagens
+df_tabela_contingencia <- df_tabela_contingencia |>
+  mutate(Porcentagem = sprintf("%.2f%%", (Frequência / sum(Frequência)) * 100)) |>
+  filter(Frequência > 0)
+
+# Criando a tabela interativa com DT
+DT::datatable(df_tabela_contingencia,
+          rownames = FALSE,
+          class = 'cell-border stripe hover',
+          options = list(paging = F,
+                         searching = F,
+                         info = F))
+```
+
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ clusterRD1, data = base)
+
+nomes = c("1", "2", "3")
+
+ggsurvplot(km, data = base, legend = "none", legend.labs = nomes, 
+           risk.table = TRUE, risk.table.height = 0.3)
+```
+
+## clusterRD3
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ ramoDescricao, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+km_surv$clusterRD3 <- base$clusterRD3[match(km_surv$strata, base$ramoDescricao)]
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, group = strata, color = clusterRD3)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+pred_risk$clusterRD3 <- base$clusterRD3[match(pred_risk$strata, base$ramoDescricao)]
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, group = strata, color = clusterRD3))  +
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
+
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ clusterRD3, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, color = strata)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata))  +
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
+
+```{r}
+tabela_contingencia <- table(base$ramoDescricao, base$clusterRD3)
+
+df_tabela_contingencia <- as.data.frame(tabela_contingencia)
+
+colnames(df_tabela_contingencia) <- c("ramoDescricao", "clusterRD3", "Frequência")
+
+# Calculando porcentagens
+df_tabela_contingencia <- df_tabela_contingencia |>
+  mutate(Porcentagem = sprintf("%.2f%%", (Frequência / sum(Frequência)) * 100)) |>
+  filter(Frequência > 0)
+
+# Criando a tabela interativa com DT
+DT::datatable(df_tabela_contingencia,
+          rownames = FALSE,
+          class = 'cell-border stripe hover',
+          options = list(paging = F,
+                         searching = F,
+                         info = F))
+```
+
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ clusterRD3, data = base)
+
+nomes = c("1", "2")
+
+ggsurvplot(km, data = base, legend = "none", legend.labs = nomes, 
+           risk.table = TRUE, risk.table.height = 0.3)
+```
+
+# Produto Nome {.tabset .tabset-fade .tabset-pills}
+```{r fig.width=8, fig.height=8}
+km = survfit2(Surv(tempo_mes, delta) ~ produtoNome, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, color = strata)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) +
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE)) |>
+  layout(legend = list(orientation = "h", font = list(size = 10)))
+```
+
+## clusterPN1
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ produtoNome, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+km_surv$clusterPN1 <- base$clusterPN1[match(km_surv$strata, base$produtoNome)]
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, group = strata, color = clusterPN1)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+pred_risk$clusterPN1 <- base$clusterPN1[match(pred_risk$strata, base$produtoNome)]
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, group = strata, color = clusterPN1))  +
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
+
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ clusterPN1, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, color = strata)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata))  +
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
+
+```{r}
+tabela_contingencia <- table(base$produtoNome, base$clusterPN1)
+
+df_tabela_contingencia <- as.data.frame(tabela_contingencia)
+
+colnames(df_tabela_contingencia) <- c("produtoNome", "clusterPN1", "Frequência")
+
+# Calculando porcentagens
+df_tabela_contingencia <- df_tabela_contingencia |>
+  mutate(Porcentagem = sprintf("%.2f%%", (Frequência / sum(Frequência)) * 100)) |>
+  filter(Frequência > 0)
+
+# Criando a tabela interativa com DT
+DT::datatable(
+  df_tabela_contingencia,
+  rownames = FALSE,
+  class = 'cell-border stripe hover',
+  filter = 'top',
+  options = list(
+    paging = TRUE,
+    searching = TRUE,
+    info = FALSE,
+    lengthChange = FALSE))
+```
+
+```{r fig.width=10, fig.height=8}
+km = survfit2(Surv(tempo_mes, delta) ~ clusterPN1, data = base)
+
+nomes = c("1", "2", "3")
+
+ggsurvplot(km, data = base, legend = "none", legend.labs = nomes, 
+           risk.table = TRUE, risk.table.height = 0.3)
+```
+
+## clusterPN2
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ produtoNome, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+km_surv$clusterPN2 <- base$clusterPN2[match(km_surv$strata, base$produtoNome)]
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, group = strata, color = clusterPN2)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+pred_risk$clusterPN2 <- base$clusterPN2[match(pred_risk$strata, base$produtoNome)]
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, group = strata, color = clusterPN2))  +
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
+
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ clusterPN2, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, color = strata)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata))  +
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
+
+```{r}
+tabela_contingencia <- table(base$produtoNome, base$clusterPN2)
+
+df_tabela_contingencia <- as.data.frame(tabela_contingencia)
+
+colnames(df_tabela_contingencia) <- c("produtoNome", "clusterPN2", "Frequência")
+
+# Calculando porcentagens
+df_tabela_contingencia <- df_tabela_contingencia |>
+  mutate(Porcentagem = sprintf("%.2f%%", (Frequência / sum(Frequência)) * 100)) |>
+  filter(Frequência > 0)
+
+# Criando a tabela interativa com DT
+DT::datatable(
+  df_tabela_contingencia,
+  rownames = FALSE,
+  class = 'cell-border stripe hover',
+  filter = 'top',
+  options = list(
+    paging = TRUE,
+    searching = TRUE,
+    info = FALSE,
+    lengthChange = FALSE))
+```
+
+```{r fig.width=10, fig.height=8}
+km = survfit2(Surv(tempo_mes, delta) ~ clusterPN2, data = base)
+
+nomes = c("1", "2", "3")
+
+ggsurvplot(km, data = base, legend = "none", legend.labs = nomes, 
+           risk.table = TRUE, risk.table.height = 0.3)
+```
+
+## clusterPN3
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ produtoNome, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+km_surv$clusterPN3 <- base$clusterPN3[match(km_surv$strata, base$produtoNome)]
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, group = strata, color = clusterPN3)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+pred_risk$clusterPN3 <- base$clusterPN3[match(pred_risk$strata, base$produtoNome)]
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, group = strata, color = clusterPN3))  +
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
+
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ clusterPN3, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, color = strata)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata))  +
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
+
+```{r}
+tabela_contingencia <- table(base$produtoNome, base$clusterPN3)
+
+df_tabela_contingencia <- as.data.frame(tabela_contingencia)
+
+colnames(df_tabela_contingencia) <- c("produtoNome", "clusterPN3", "Frequência")
+
+# Calculando porcentagens
+df_tabela_contingencia <- df_tabela_contingencia |>
+  mutate(Porcentagem = sprintf("%.2f%%", (Frequência / sum(Frequência)) * 100)) |>
+  filter(Frequência > 0)
+
+# Criando a tabela interativa com DT
+DT::datatable(
+  df_tabela_contingencia,
+  rownames = FALSE,
+  class = 'cell-border stripe hover',
+  filter = 'top',
+  options = list(
+    paging = TRUE,
+    searching = TRUE,
+    info = FALSE,
+    lengthChange = FALSE))
+```
+
+```{r fig.width=10, fig.height=8}
+km = survfit2(Surv(tempo_mes, delta) ~ clusterPN3, data = base)
+
+nomes = c("1", "2")
+
+ggsurvplot(km, data = base, legend = "none", legend.labs = nomes, 
+           risk.table = TRUE, risk.table.height = 0.3)
+```
+
+# clusterCC + clusterRD3 + clusterPN3
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ clusterCC + clusterRD3 + clusterPN3, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, color = strata)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata))  +
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
+
+```{r fig.width=10, fig.height=8}
+nomes = c("1, 1, 1", "1, 1, 2", "1, 2, 1", "1, 2, 2",
+          "2, 1, 1", "2, 1, 2", "2, 2, 1", "2, 2, 2")
+
+ggsurvplot(km, data = base, legend = "none", legend.labs = nomes, 
+           risk.table = TRUE, risk.table.height = 0.3)
+```
+
+# clusterRD3 + clusterPN3
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ clusterRD3 + clusterPN3, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, color = strata)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata))  +
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
+
+```{r fig.width=10, fig.height=8}
+nomes = c("1, 1", "1, 2", "2, 1", "2, 2")
+
+ggsurvplot(km, data = base, legend = "none", legend.labs = nomes, 
+           risk.table = TRUE, risk.table.height = 0.3)
+```

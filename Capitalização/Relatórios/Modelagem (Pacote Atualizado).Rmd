@@ -1,0 +1,772 @@
+---
+title: "Modelagem (Pacote Atualizado)"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    highlight: tango
+    fig_width: 5
+    fig_height: 4
+    css: "Estilos/estilos.css"
+---
+
+```{r, include=FALSE}
+library(arrow)
+library(tidyverse)
+library(ggsurvfit)
+library(lnmixsurv)
+library(plotly)
+library(bayesplot)
+library(posterior)
+library(knitr)
+library(DT)
+library(kableExtra)
+
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, fig.align = 'left', echo=FALSE)
+
+setwd(dirname(rstudioapi::getSourceEditorContext()$path))
+
+base_resgate <- read_parquet("../Bases/base_resgate_clusters.parquet")
+
+base_saldamento <- read_parquet("../Bases/base_saldamento_clusters.parquet")
+
+# Preciso truncar a base saldamento
+# Truncar 1-2-2 no tempo 100
+# Truncar 4-4-4 no tempo 84
+# Truncar 5-5-5 no tempo 96
+
+base_saldamento <- base_saldamento |>
+  mutate(delta2 = case_when((combinação_agrupada == "1-2-2" & tempo_mes > 100) ~ 0,
+                            (combinação_agrupada == "4-4-4" & tempo_mes > 84) ~ 0,
+                            (combinação_agrupada == "5-5-5" & tempo_mes > 96) ~ 0,
+                            TRUE ~ delta2),
+         tempo_mes = case_when((combinação_agrupada == "1-2-2" & tempo_mes > 100) ~ 100,
+                               (combinação_agrupada == "4-4-4" & tempo_mes > 84) ~ 84,
+                               (combinação_agrupada == "5-5-5" & tempo_mes > 96) ~ 96,
+                               TRUE ~ tempo_mes))
+
+# Função
+tx.emp <- function(t, s, cat) {
+  seq_time <- 1:length(t)
+  
+  aux <- NULL
+  
+  for (i in 2:length(seq_time)) {
+    aux <- c(aux, 
+             (s[seq_time[i - 1]] - s[seq_time[i]]) /
+               ((t[seq_time[i]] - t[seq_time[i - 1]]) * s[seq_time[i - 1]]))
+  }
+  
+  return(bind_rows(tibble(time = 0, hazard = 0, strata = cat),
+                   tibble(time = t[-1], hazard = aux,
+                          strata = cat)))
+}
+```
+
+# EM - Resgate {.tabset .tabset-fade .tabset-pills}
+
+## 1 Componente
+```{r fig.width=10, fig.height=6}
+model_1comp_EM1 <- read_rds('../Modelos/EM_3/modelo_1comp_EM1.rds')
+plot(model_1comp_EM1)
+```
+
+```{r fig.width=10, fig.height=6}
+# Sobrevivência
+preds1EM <- plot_fit_on_data(model_1comp_EM1, data = base_resgate)
+
+plot1 <- preds1EM$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24)) +
+  labs(title = "Resgate - 1 Componente EM")
+
+# Risco
+preds1EM_risco <- plot_fit_on_data(model_1comp_EM1, type = "hazard", data = base_resgate)
+
+plot2 <- preds1EM_risco$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24)) +
+  labs(title = "Resgate - 1 Componente EM")
+
+subplot(ggplotly(plot1), plotly::style(ggplotly(plot2), showlegend = FALSE))
+```
+
+## 2 Componentes
+
+#### Primeiro
+```{r fig.width=10, fig.height=6}
+model_2comp_EM1 <- read_rds('../Modelos/EM_3/modelo_2comp_EM1.rds')
+plot(model_2comp_EM1)
+```
+
+```{r fig.width=10, fig.height=6}
+# Sobrevivência
+preds2EM <- plot_fit_on_data(model_2comp_EM1, data = base_resgate)
+
+plot1 <- preds2EM$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24)) +
+  labs(title = "Resgate - 2 Componentes EM")
+
+# Risco
+preds2EM_risco <- plot_fit_on_data(model_2comp_EM1, type = "hazard", data = base_resgate)
+
+plot2 <- preds2EM_risco$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24)) +
+  labs(title = "Resgate - 2 Componentes EM")
+
+subplot(ggplotly(plot1), plotly::style(ggplotly(plot2), showlegend = FALSE))
+```
+
+#### Segundo
+```{r fig.width=10, fig.height=6}
+model_2comp_EM2 <- read_rds('../Modelos/EM_3/modelo_2comp_EM2.rds')
+plot(model_2comp_EM2)
+```
+
+```{r fig.width=10, fig.height=6}
+# Sobrevivência
+preds2EM <- plot_fit_on_data(model_2comp_EM2, data = base_resgate)
+
+plot1 <- preds2EM$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24)) +
+  labs(title = "Resgate - 2 Componentes EM")
+
+# Risco
+preds2EM_risco <- plot_fit_on_data(model_2comp_EM2, type = "hazard", data = base_resgate)
+
+plot2 <- preds2EM_risco$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24)) +
+  labs(title = "Resgate - 2 Componentes EM")
+
+subplot(ggplotly(plot1), plotly::style(ggplotly(plot2), showlegend = FALSE))
+```
+
+#### Terceiro
+```{r fig.width=10, fig.height=6}
+model_2comp_EM3 <- read_rds('../Modelos/EM_3/modelo_2comp_EM3.rds')
+plot(model_2comp_EM3)
+```
+
+```{r fig.width=10, fig.height=6}
+# Sobrevivência
+preds2EM <- plot_fit_on_data(model_2comp_EM3, data = base_resgate)
+
+plot1 <- preds2EM$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24)) +
+  labs(title = "Resgate - 2 Componentes EM")
+
+# Risco
+preds2EM_risco <- plot_fit_on_data(model_2comp_EM3, type = "hazard", data = base_resgate)
+
+plot2 <- preds2EM_risco$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24)) +
+  labs(title = "Resgate - 2 Componentes EM")
+
+subplot(ggplotly(plot1), plotly::style(ggplotly(plot2), showlegend = FALSE))
+```
+
+## 3 Componentes
+
+#### Primeiro
+```{r fig.width=10, fig.height=6}
+model_3comp_EM1 <- read_rds('../Modelos/EM_3/modelo_3comp_EM1.rds')
+plot(model_3comp_EM1)
+```
+
+```{r fig.width=10, fig.height=6}
+# Sobrevivência
+preds3EM <- plot_fit_on_data(model_3comp_EM1, data = base_resgate)
+
+plot1 <- preds3EM$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24)) +
+  labs(title = "Resgate - 3 Componentes EM")
+
+# Risco
+preds3EM_risco <- plot_fit_on_data(model_3comp_EM1, type = "hazard", data = base_resgate)
+
+plot2 <- preds3EM_risco$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24)) +
+  labs(title = "Resgate - 3 Componentes EM")
+
+subplot(ggplotly(plot1), plotly::style(ggplotly(plot2), showlegend = FALSE))
+```
+
+#### Segundo
+```{r fig.width=10, fig.height=6}
+model_3comp_EM2 <- read_rds('../Modelos/EM_3/modelo_3comp_EM2.rds')
+plot(model_3comp_EM2)
+```
+
+```{r fig.width=10, fig.height=6}
+# Sobrevivência
+preds3EM <- plot_fit_on_data(model_3comp_EM2, data = base_resgate)
+
+plot1 <- preds3EM$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24)) +
+  labs(title = "Resgate - 3 Componentes EM")
+
+# Risco
+preds3EM_risco <- plot_fit_on_data(model_3comp_EM2, type = "hazard", data = base_resgate)
+
+plot2 <- preds3EM_risco$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24)) +
+  labs(title = "Resgate - 3 Componentes EM")
+
+subplot(ggplotly(plot1), plotly::style(ggplotly(plot2), showlegend = FALSE))
+```
+
+#### Terceiro
+```{r fig.width=10, fig.height=6}
+model_3comp_EM3 <- read_rds('../Modelos/EM_3/modelo_3comp_EM3.rds')
+plot(model_3comp_EM3)
+```
+
+```{r fig.width=10, fig.height=6}
+# Sobrevivência
+preds3EM <- plot_fit_on_data(model_3comp_EM3, data = base_resgate)
+
+plot1 <- preds3EM$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24)) +
+  labs(title = "Resgate - 3 Componentes EM")
+
+# Risco
+preds3EM_risco <- plot_fit_on_data(model_3comp_EM3, type = "hazard", data = base_resgate)
+
+plot2 <- preds3EM_risco$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24)) +
+  labs(title = "Resgate - 3 Componentes EM")
+
+subplot(ggplotly(plot1), plotly::style(ggplotly(plot2), showlegend = FALSE))
+```
+
+## 4 Componentes
+
+#### Primeiro
+```{r fig.width=10, fig.height=6}
+model_4comp_EM1 <- read_rds('../Modelos/EM_3/modelo_4comp_EM1.rds')
+plot(model_4comp_EM1)
+```
+
+```{r fig.width=10, fig.height=6}
+# Sobrevivência
+preds4EM <- plot_fit_on_data(model_4comp_EM1, data = base_resgate)
+
+plot1 <- preds4EM$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24)) +
+  labs(title = "Resgate - 4 Componentes EM")
+
+# Risco
+preds4EM_risco <- plot_fit_on_data(model_4comp_EM1, type = "hazard", data = base_resgate)
+
+plot2 <- preds4EM_risco$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24)) +
+  labs(title = "Resgate - 4 Componentes EM")
+
+subplot(ggplotly(plot1), plotly::style(ggplotly(plot2), showlegend = FALSE))
+```
+
+#### Segundo
+```{r fig.width=10, fig.height=6}
+model_4comp_EM2 <- read_rds('../Modelos/EM_3/modelo_4comp_EM2.rds')
+plot(model_4comp_EM2)
+```
+
+```{r fig.width=10, fig.height=6}
+# Sobrevivência
+preds4EM <- plot_fit_on_data(model_4comp_EM2, data = base_resgate)
+
+plot1 <- preds4EM$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24)) +
+  labs(title = "Resgate - 4 Componentes EM")
+
+# Risco
+preds4EM_risco <- plot_fit_on_data(model_4comp_EM2, type = "hazard", data = base_resgate)
+
+plot2 <- preds4EM_risco$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24)) +
+  labs(title = "Resgate - 4 Componentes EM")
+
+subplot(ggplotly(plot1), plotly::style(ggplotly(plot2), showlegend = FALSE))
+```
+
+#### Terceiro
+```{r fig.width=10, fig.height=6}
+model_4comp_EM3 <- read_rds('../Modelos/EM_3/modelo_4comp_EM3.rds')
+plot(model_4comp_EM3)
+```
+
+```{r fig.width=10, fig.height=6}
+# Sobrevivência
+preds4EM <- plot_fit_on_data(model_4comp_EM3, data = base_resgate)
+
+plot1 <- preds4EM$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24)) +
+  labs(title = "Resgate - 4 Componentes EM")
+
+# Risco
+preds4EM_risco <- plot_fit_on_data(model_4comp_EM3, type = "hazard", data = base_resgate)
+
+plot2 <- preds4EM_risco$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24)) +
+  labs(title = "Resgate - 4 Componentes EM")
+
+subplot(ggplotly(plot1), plotly::style(ggplotly(plot2), showlegend = FALSE))
+```
+
+# Bayesiano - Resgate {.tabset .tabset-fade .tabset-pills}
+
+## 1 Componente
+```{r fig.width=10, fig.height=6}
+model_1comp <- read_rds('../Modelos/Bay_3/modelo_1comp.rds')
+
+# Retirando o warmup
+model_1comp$posterior <- posterior::subset_draws(model_1comp$posterior, iter = 14001:16000)
+
+# Sobrevivência
+preds1Bayesian <- plot_fit_on_data(model_1comp, interval = "credible", data = base_resgate)
+
+(preds1Bayesian$ggplot +
+    theme_bw() +
+    scale_x_continuous(breaks = seq(0, 168, 24))) |>
+  ggplotly()
+
+# Risco
+preds1Bayesian_risco <- plot_fit_on_data(model_1comp, type = "hazard", interval = "credible", data = base_resgate)
+
+(preds1Bayesian_risco$ggplot +
+    theme_bw() +
+    scale_x_continuous(breaks = seq(0, 168, 24))) |>
+  ggplotly()
+```
+
+```{r fig.width=10, fig.height=6}
+color_scheme_set("viridis")
+mcmc_trace(model_1comp$posterior)
+```
+
+## 2 Componentes
+```{r fig.width=10, fig.height=6}
+model_2comp <- read_rds('../Modelos/Bay_3/modelo_2comp.rds')
+
+# Retirando o warmup
+model_2comp$posterior <- posterior::subset_draws(model_2comp$posterior, iter = 14001:16000)
+
+# Sobrevivência
+preds2Bayesian <- plot_fit_on_data(model_2comp, interval = "credible", data = base_resgate)
+
+(preds2Bayesian$ggplot +
+    theme_bw() +
+    scale_x_continuous(breaks = seq(0, 168, 24))) |>
+  ggplotly()
+
+# Risco
+preds2Bayesian_risco <- plot_fit_on_data(model_2comp, type = "hazard", interval = "credible", data = base_resgate)
+
+(preds2Bayesian_risco$ggplot +
+    theme_bw() +
+    scale_x_continuous(breaks = seq(0, 168, 24))) |>
+  ggplotly()
+```
+
+```{r fig.width=14, fig.height=10}
+color_scheme_set("viridis")
+mcmc_trace(model_2comp$posterior)
+```
+
+## 3 Componentes
+```{r fig.width=10, fig.height=6}
+model_3comp <- read_rds('../Modelos/Bay_3/modelo_3comp.rds')
+
+# Retirando o warmup
+model_3comp$posterior <- posterior::subset_draws(model_3comp$posterior, iter = 14001:16000)
+
+# Sobrevivência
+preds3Bayesian <- plot_fit_on_data(model_3comp, interval = "credible", data = base_resgate)
+
+(preds3Bayesian$ggplot +
+    theme_bw() +
+    scale_x_continuous(breaks = seq(0, 168, 24))) |>
+  ggplotly()
+
+# Risco
+preds3Bayesian_risco <- plot_fit_on_data(model_3comp, type = "hazard", interval = "credible", data = base_resgate)
+
+(preds3Bayesian_risco$ggplot +
+    theme_bw() +
+    scale_x_continuous(breaks = seq(0, 168, 24))) |>
+  ggplotly()
+```
+
+```{r fig.width=15, fig.height=10}
+color_scheme_set("viridis")
+mcmc_trace(model_3comp$posterior)
+```
+
+## 4 Componentes
+```{r fig.width=10, fig.height=6}
+model_4comp <- read_rds('../Modelos/Bay_3/modelo_4comp.rds')
+
+# Retirando o warmup
+model_4comp$posterior <- posterior::subset_draws(model_4comp$posterior, iter = 14001:16000)
+
+# Sobrevivência
+preds4Bayesian <- plot_fit_on_data(model_4comp, interval = "credible", data = base_resgate)
+
+(preds4Bayesian$ggplot +
+    theme_bw() +
+    scale_x_continuous(breaks = seq(0, 168, 24))) |>
+  ggplotly()
+
+# Risco
+preds4Bayesian_risco <- plot_fit_on_data(model_4comp, type = "hazard", interval = "credible", data = base_resgate)
+
+(preds4Bayesian_risco$ggplot +
+    theme_bw() +
+    scale_x_continuous(breaks = seq(0, 168, 24))) |>
+  ggplotly()
+```
+
+```{r fig.width=16, fig.height=10}
+color_scheme_set("viridis")
+mcmc_trace(model_4comp$posterior)
+```
+
+# Métricas Resgate
+```{r}
+metricas <- read_rds('../Modelos/Bay_3/metricas_resgate.rds')
+
+# Manipular o objeto metrics
+metricas <- metricas |> 
+  pivot_wider(names_from = metric, values_from = value) |> 
+  select(mixture_components, everything()) |> 
+  mutate(chain = factor(chain))
+
+# Função para destacar o menor valor de todas as métricas usando HTML
+highlight_all_mins_html <- function(df) {
+  # Identifica as colunas numéricas no dataframe
+  metric_names <- names(df)[sapply(df, is.numeric)]
+  
+  for (metric_name in metric_names) {
+    min_val <- min(df[[metric_name]], na.rm = TRUE)  # Encontra o menor valor da métrica
+    df[[metric_name]] <- as.character(df[[metric_name]])
+    
+    # Encontra o índice dos menores valores na coluna da métrica
+    min_indices <- which(df[[metric_name]] == min_val)
+    
+    # Marca todos os menores valores em negrito usando HTML
+    df[[metric_name]][min_indices] <- paste0("<b>", df[[metric_name]][min_indices], "</b>")
+  }
+  
+  return(df)
+}
+
+# Aplicar a função para destacar os menores valores em todas as métricas
+metricas_formatadas <- highlight_all_mins_html(metricas)
+
+# Renderizar a tabela com a formatação HTML habilitada
+datatable(metricas_formatadas,
+          options = list(autoWidth = TRUE, searching = FALSE, 
+                         paging = FALSE, dom = "t"), rownames = FALSE, escape = FALSE)
+```
+
+```{r fig.width=10, fig.height=6}
+metricas <- read_rds('../Modelos/Bay_3/metricas_resgate.rds')
+
+# Tratar coluna chain
+metricas$chain <- factor(metricas$chain)
+
+ggplot(metricas) +
+  geom_col(aes(x = mixture_components, y = value, fill = chain), position = "dodge") +
+  facet_wrap(~metric, scales = "free_y") +
+  theme_light() +
+  labs(x = "Mixture Components", y = "Value", fill = "Chain")
+```
+
+# EM - Saldamento {.tabset .tabset-fade .tabset-pills}
+Truncar 1-2-2 no tempo 100, o n.risk no tempo 100 é de 23;  
+Truncar 4-4-4 no tempo 84, o n.risk no tempo 84 é de 211;  
+Truncar 5-5-5 no tempo 96, o n.risk no tempo 96 é de 317.  
+
+## 1 Componente
+```{r fig.width=10, fig.height=6}
+model_1comp_EM_sald <- read_rds('../Modelos/EM_3/modelo_1comp_EM_sald.rds')
+plot(model_1comp_EM_sald)
+```
+
+```{r fig.width=10, fig.height=6}
+# Sobrevivência
+preds1EM_sald <- plot_fit_on_data(model_1comp_EM_sald, data = base_saldamento)
+
+plot1 <- preds1EM_sald$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24))
+
+# Risco
+preds1EM_sald_risco <- plot_fit_on_data(model_1comp_EM_sald, type = "hazard", data = base_saldamento)
+
+plot2 <- preds1EM_sald_risco$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24))
+
+subplot(ggplotly(plot1), plotly::style(ggplotly(plot2), showlegend = FALSE))
+```
+
+## 2 Componentes
+```{r fig.width=10, fig.height=6}
+model_2comp_EM_sald <- read_rds('../Modelos/EM_3/modelo_2comp_EM_sald.rds')
+plot(model_2comp_EM_sald)
+```
+
+```{r fig.width=10, fig.height=6}
+# Sobrevivência
+preds2EM_sald <- plot_fit_on_data(model_2comp_EM_sald, data = base_saldamento)
+
+plot1 <- preds2EM_sald$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24))
+
+# Risco
+preds2EM_sald_risco <- plot_fit_on_data(model_2comp_EM_sald, type = "hazard", data = base_saldamento)
+
+plot2 <- preds2EM_sald_risco$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24))
+
+subplot(ggplotly(plot1), plotly::style(ggplotly(plot2), showlegend = FALSE))
+```
+
+## 3 Componentes
+```{r fig.width=10, fig.height=6}
+model_3comp_EM_sald <- read_rds('../Modelos/EM_3/modelo_3comp_EM_sald.rds')
+plot(model_3comp_EM_sald)
+```
+
+```{r fig.width=10, fig.height=6}
+# Sobrevivência
+preds3EM_sald <- plot_fit_on_data(model_3comp_EM_sald, data = base_saldamento)
+
+plot1 <- preds3EM_sald$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24))
+
+# Risco
+preds3EM_sald_risco <- plot_fit_on_data(model_3comp_EM_sald, type = "hazard", data = base_saldamento)
+
+plot2 <- preds3EM_sald_risco$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24))
+
+subplot(ggplotly(plot1), plotly::style(ggplotly(plot2), showlegend = FALSE))
+```
+
+## 4 Componentes
+```{r fig.width=10, fig.height=6}
+model_4comp_EM_sald <- read_rds('../Modelos/EM_3/modelo_4comp_EM_sald.rds')
+plot(model_4comp_EM_sald)
+```
+
+```{r fig.width=10, fig.height=6}
+# Sobrevivência
+preds4EM_sald <- plot_fit_on_data(model_4comp_EM_sald, data = base_saldamento)
+
+plot1 <- preds4EM_sald$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24))
+
+# Risco
+preds4EM_sald_risco <- plot_fit_on_data(model_4comp_EM_sald, type = "hazard", data = base_saldamento)
+
+plot2 <- preds4EM_sald_risco$ggplot +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24))
+
+subplot(ggplotly(plot1), plotly::style(ggplotly(plot2), showlegend = FALSE))
+```
+
+# Bayesiano - Saldamento {.tabset .tabset-fade .tabset-pills}
+
+## 1 Componente
+```{r fig.width=10, fig.height=6}
+model_1comp_sald <- read_rds('../Modelos/Bay_3/modelo_1comp_sald.rds')
+
+# Retirando o warmup
+model_1comp_sald$posterior <- posterior::subset_draws(model_1comp_sald$posterior, iter = 14001:16000)
+
+# Sobrevivência
+preds1Bayesian_sald <- plot_fit_on_data(model_1comp_sald, interval = "credible", data = base_saldamento)
+
+(preds1Bayesian_sald$ggplot +
+    theme_bw() +
+    scale_x_continuous(breaks = seq(0, 168, 24))) |>
+  ggplotly()
+
+# Risco
+preds1Bayesian_sald_risco <- plot_fit_on_data(model_1comp_sald, type = "hazard", interval = "credible", data = base_saldamento)
+
+(preds1Bayesian_sald_risco$ggplot +
+    theme_bw() +
+    scale_x_continuous(breaks = seq(0, 168, 24))) |>
+  ggplotly()
+```
+
+```{r fig.width=10, fig.height=6}
+color_scheme_set("viridis")
+mcmc_trace(model_1comp_sald$posterior)
+```
+
+## 2 Componentes
+```{r fig.width=10, fig.height=6}
+model_2comp_sald <- read_rds('../Modelos/Bay_3/modelo_2comp_sald.rds')
+
+# Retirando o warmup
+model_2comp_sald$posterior <- posterior::subset_draws(model_2comp_sald$posterior, iter = 14001:16000)
+
+# Sobrevivência
+preds2Bayesian_sald <- plot_fit_on_data(model_2comp_sald, interval = "credible", data = base_saldamento)
+
+(preds2Bayesian_sald$ggplot +
+    theme_bw() +
+    scale_x_continuous(breaks = seq(0, 168, 24))) |>
+  ggplotly()
+
+# Risco
+preds2Bayesian_sald_risco <- plot_fit_on_data(model_2comp_sald, type = "hazard", interval = "credible", data = base_saldamento)
+
+(preds2Bayesian_sald_risco$ggplot +
+    theme_bw() +
+    scale_x_continuous(breaks = seq(0, 168, 24))) |>
+  ggplotly()
+```
+
+```{r fig.width=14, fig.height=10}
+color_scheme_set("viridis")
+mcmc_trace(model_2comp_sald$posterior)
+```
+
+## 3 Componentes
+```{r fig.width=10, fig.height=6}
+model_3comp_sald <- read_rds('../Modelos/Bay_3/modelo_3comp_sald.rds')
+
+# Retirando o warmup
+model_3comp_sald$posterior <- posterior::subset_draws(model_3comp_sald$posterior, iter = 14001:16000)
+
+# Sobrevivência
+preds3Bayesian_sald <- plot_fit_on_data(model_3comp_sald, interval = "credible", data = base_saldamento)
+
+(preds3Bayesian_sald$ggplot +
+    theme_bw() +
+    scale_x_continuous(breaks = seq(0, 168, 24))) |>
+  ggplotly()
+
+# Risco
+preds3Bayesian_sald_risco <- plot_fit_on_data(model_3comp_sald, type = "hazard", interval = "credible", data = base_saldamento)
+
+(preds3Bayesian_sald_risco$ggplot +
+    theme_bw() +
+    scale_x_continuous(breaks = seq(0, 168, 24))) |>
+  ggplotly()
+```
+
+```{r fig.width=15, fig.height=10}
+color_scheme_set("viridis")
+mcmc_trace(model_3comp_sald$posterior)
+```
+
+## 4 Componentes
+```{r fig.width=10, fig.height=6}
+model_4comp_sald <- read_rds('../Modelos/Bay_3/modelo_4comp_sald.rds')
+
+# Retirando o warmup
+model_4comp_sald$posterior <- posterior::subset_draws(model_4comp_sald$posterior, iter = 14001:16000)
+
+# Sobrevivência
+preds4Bayesian_sald <- plot_fit_on_data(model_4comp_sald, interval = "credible", data = base_saldamento)
+
+(preds4Bayesian_sald$ggplot +
+    theme_bw() +
+    scale_x_continuous(breaks = seq(0, 168, 24))) |>
+  ggplotly()
+
+# Risco
+preds4Bayesian_sald_risco <- plot_fit_on_data(model_4comp_sald, type = "hazard", interval = "credible", data = base_saldamento)
+
+(preds4Bayesian_sald_risco$ggplot +
+    theme_bw() +
+    scale_x_continuous(breaks = seq(0, 168, 24))) |>
+  ggplotly()
+```
+
+```{r fig.width=16, fig.height=10}
+color_scheme_set("viridis")
+mcmc_trace(model_4comp_sald$posterior)
+```
+
+# Métricas Saldamento
+```{r}
+metricas <- read_rds('../Modelos/Bay_3/metricas_saldamento.rds')
+
+# Manipular o objeto metrics
+metricas <- metricas |> 
+  pivot_wider(names_from = metric, values_from = value) |> 
+  select(mixture_components, everything()) |> 
+  mutate(chain = factor(chain))
+
+# Função para destacar o menor valor de todas as métricas usando HTML
+highlight_all_mins_html <- function(df) {
+  # Identifica as colunas numéricas no dataframe
+  metric_names <- names(df)[sapply(df, is.numeric)]
+  
+  for (metric_name in metric_names) {
+    min_val <- min(df[[metric_name]], na.rm = TRUE)  # Encontra o menor valor da métrica
+    df[[metric_name]] <- as.character(df[[metric_name]])
+    
+    # Encontra o índice dos menores valores na coluna da métrica
+    min_indices <- which(df[[metric_name]] == min_val)
+    
+    # Marca todos os menores valores em negrito usando HTML
+    df[[metric_name]][min_indices] <- paste0("<b>", df[[metric_name]][min_indices], "</b>")
+  }
+  
+  return(df)
+}
+
+# Aplicar a função para destacar os menores valores em todas as métricas
+metricas_formatadas <- highlight_all_mins_html(metricas)
+
+# Renderizar a tabela com a formatação HTML habilitada
+datatable(metricas_formatadas,
+          options = list(autoWidth = TRUE, searching = FALSE, 
+                         paging = FALSE, dom = "t"), rownames = FALSE, escape = FALSE)
+```
+
+```{r fig.width=10, fig.height=6}
+metricas <- read_rds('../Modelos/Bay_3/metricas_saldamento.rds')
+
+# Tratar coluna chain
+metricas$chain <- factor(metricas$chain)
+
+ggplot(metricas) +
+  geom_col(aes(x = mixture_components, y = value, fill = chain), position = "dodge") +
+  facet_wrap(~metric, scales = "free_y") +
+  theme_light() +
+  labs(x = "Mixture Components", y = "Value", fill = "Chain")
+```

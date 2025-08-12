@@ -1,0 +1,716 @@
+---
+title: "Capitalização"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    highlight: tango
+    fig_width: 5
+    fig_height: 4
+    css: "Estilos/estilos.css"
+---
+
+```{r, include=FALSE}
+# Carregando os pacotes
+library(arrow)
+library(data.table)
+library(dplyr)
+library(tidyverse)
+library(plotly)
+library(survival)
+library(ggsurvfit)
+library(flextable)
+library(DT)
+library(survminer)
+library(gridExtra)
+library(officer)
+library(knitr)
+
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo = FALSE, fig.align = 'left')
+
+# Carregando a base de dados
+base <- read_parquet('../Bases/base_modificada.parquet')
+
+p = ggplot(base) + theme_classic()
+
+# Função
+tx.emp <- function(t, s, cat) {
+  seq_time <- 1:length(t)
+  
+  aux <- NULL
+  
+  for (i in 2:length(seq_time)) {
+    aux <- c(aux, 
+             (s[seq_time[i - 1]] - s[seq_time[i]]) /
+               ((t[seq_time[i]] - t[seq_time[i - 1]]) * s[seq_time[i - 1]]))
+  }
+  
+  return(bind_rows(tibble(time = 0, hazard = 0, strata = cat),
+                   tibble(time = t[-1], hazard = aux,
+                          strata = cat)))
+}
+```
+
+Capitalização possui 143.693 observações
+
+# Análise {.tabset .tabset-fade .tabset-pills}
+
+## Status
+Ativo virou Censura.
+```{r fig.width=10, fig.height=4}
+tabela_porcentagem <- base %>%
+  group_by(status) %>%
+  summarise(contagem = n()) %>%
+  mutate(porcentagem = round(contagem / sum(contagem) * 100, 2))
+
+(ggplot(tabela_porcentagem, aes(x = status, y = contagem, fill = status)) +
+  geom_bar(stat = "identity") +
+  labs(y = "Contagem", x = "Status") +
+  theme_classic()) |>
+  ggplotly()
+
+# Converter para data frame para criar a tabela
+tabela_df <- as.data.frame(tabela_porcentagem)
+
+# Renomear as colunas
+colnames(tabela_df) <- c("Status", "Contagem", "Porcentagem (%)")
+
+# Criar a tabela usando flextable
+flextable(tabela_df) %>%
+  width(width = 1.5) %>%
+  bold(part = "header") %>%
+  theme_box() %>%
+  align(align = "center", part = "all")
+```
+
+## Sexo
+```{r fig.width=10, fig.height=4}
+tabela_porcentagem <- base %>%
+  group_by(sexoCliente) %>%
+  summarise(contagem = n()) %>%
+  mutate(porcentagem = round(contagem / sum(contagem) * 100, 2))
+
+(ggplot(tabela_porcentagem, aes(x = sexoCliente, y = contagem, fill = sexoCliente)) +
+  geom_bar(stat = "identity") +
+  labs(y = "Contagem", x = "Sexo Cliente") +
+  theme_classic()) |>
+  ggplotly()
+
+# Converter para data frame para criar a tabela
+tabela_df <- as.data.frame(tabela_porcentagem)
+
+# Renomear as colunas
+colnames(tabela_df) <- c("Sexo", "Contagem", "Porcentagem (%)")
+
+# Criar a tabela usando flextable
+flextable(tabela_df) %>%
+  width(width = 1.5) %>%
+  bold(part = "header") %>%
+  theme_box() %>%
+  align(align = "center", part = "all")
+```
+
+## Categoria do Cliente
+```{r fig.width=10, fig.height=4}
+tabela_porcentagem <- base %>%
+  group_by(categoriaCliente) %>%
+  summarise(contagem = n()) %>%
+  mutate(porcentagem = round(contagem / sum(contagem) * 100, 2))
+
+(ggplot(tabela_porcentagem, aes(x = categoriaCliente, y = contagem, fill = categoriaCliente)) +
+  geom_bar(stat = "identity") +
+  labs(y = "Contagem", x = "Categoria Cliente") +
+  theme_classic()) |>
+  ggplotly()
+
+# Converter para data frame para criar a tabela
+tabela_df <- as.data.frame(tabela_porcentagem)
+
+# Renomear as colunas
+colnames(tabela_df) <- c("Categoria", "Contagem", "Porcentagem (%)")
+
+# Criar a tabela usando flextable
+flextable(tabela_df) %>%
+  width(width = 1.5) %>%
+  bold(part = "header") %>%
+  theme_box() %>%
+  align(align = "center", part = "all")
+```
+
+## Forma de Cobrança
+```{r fig.width=10, fig.height=4}
+tabela_porcentagem <- base %>%
+  group_by(formaCobranca) %>%
+  summarise(contagem = n()) %>%
+  mutate(porcentagem = round(contagem / sum(contagem) * 100, 2))
+
+(ggplot(tabela_porcentagem, aes(x = formaCobranca, y = contagem, fill = formaCobranca)) +
+   geom_bar(stat = "identity") +
+   labs(y = "Contagem", x = "Forma Cobrança") +
+   theme_classic() +
+   theme(axis.text.x = element_blank(),
+         axis.ticks.x = element_blank())) |>
+  ggplotly()
+
+# Converter para data frame para criar a tabela
+tabela_df <- as.data.frame(tabela_porcentagem)
+
+# Renomear as colunas
+colnames(tabela_df) <- c("Forma Cobrança", "Contagem", "Porcentagem (%)")
+
+# Criar a tabela usando flextable
+flextable(tabela_df) %>%
+  width(width = 1.5) %>%
+  bold(part = "header") %>%
+  theme_box() %>%
+  align(align = "center", part = "all")
+```
+
+## Periodicidade de Cobrança
+```{r fig.width=10, fig.height=4}
+tabela_porcentagem <- base %>%
+  group_by(periodicidadeCobranca) %>%
+  summarise(contagem = n()) %>%
+  mutate(porcentagem = round(contagem / sum(contagem) * 100, 2))
+
+(ggplot(tabela_porcentagem, aes(x = periodicidadeCobranca, y = contagem, fill = periodicidadeCobranca)) +
+  geom_bar(stat = "identity") +
+  labs(y = "Contagem", x = "Periodicidade Cobrança") +
+  theme_classic()) |>
+  ggplotly()
+
+# Converter para data frame para criar a tabela
+tabela_df <- as.data.frame(tabela_porcentagem)
+
+# Renomear as colunas
+colnames(tabela_df) <- c("Periodicidade Cobrança", "Contagem", "Porcentagem (%)")
+
+# Criar a tabela usando flextable
+flextable(tabela_df) %>%
+  width(width = 1.5) %>%
+  bold(part = "header") %>%
+  theme_box() %>%
+  align(align = "center", part = "all")
+```
+
+## Cobertura Agrupamento
+```{r fig.width=10, fig.height=4}
+tabela_porcentagem <- base %>%
+  group_by(coberturaAgrupamento) %>%
+  summarise(contagem = n()) %>%
+  mutate(porcentagem = round(contagem / sum(contagem) * 100, 2))
+
+(ggplot(tabela_porcentagem, aes(x = coberturaAgrupamento, y = contagem, fill = coberturaAgrupamento)) +
+   geom_bar(stat = "identity") +
+   labs(y = "Contagem", x = "Cobertura Agrupamento") +
+   theme_classic() +
+   theme(axis.text.x = element_blank(),
+         axis.ticks.x = element_blank())) |>
+  ggplotly()
+
+# Converter para data frame para criar a tabela
+tabela_df <- as.data.frame(tabela_porcentagem)
+
+# Renomear as colunas
+colnames(tabela_df) <- c("Cobertura Agrupamento", "Contagem", "Porcentagem (%)")
+
+# Criar a tabela usando flextable
+flextable(tabela_df) %>%
+  width(width = 1.5) %>%
+  bold(part = "header") %>%
+  theme_box() %>%
+  align(align = "center", part = "all")
+```
+
+## Ramo Descrição
+```{r fig.width=10, fig.height=4}
+tabela_porcentagem <- base %>%
+  group_by(ramoDescricao) %>%
+  summarise(contagem = n()) %>%
+  mutate(porcentagem = round(contagem / sum(contagem) * 100, 2))
+
+(ggplot(tabela_porcentagem, aes(x = ramoDescricao, y = contagem, fill = ramoDescricao)) +
+   geom_bar(stat = "identity") +
+   labs(y = "Contagem", x = "Ramo Descrição") +
+   theme_classic() +
+   theme(axis.text.x = element_blank(),
+         axis.ticks.x = element_blank())) |>
+  ggplotly()
+
+# Converter para data frame para criar a tabela
+tabela_df <- as.data.frame(tabela_porcentagem)
+
+# Renomear as colunas
+colnames(tabela_df) <- c("Ramo Descrição", "Contagem", "Porcentagem (%)")
+
+# Criar a tabela usando flextable
+flextable(tabela_df) %>%
+  width(width = 1.5) %>%
+  bold(part = "header") %>%
+  theme_box() %>%
+  align(align = "center", part = "all")
+```
+
+## Produto Nome
+```{r fig.width=8, fig.height=4}
+tabela_porcentagem <- base %>%
+  group_by(produtoNome) %>%
+  summarise(contagem = n()) %>%
+  mutate(porcentagem = round(contagem / sum(contagem) * 100, 2))
+
+(ggplot(tabela_porcentagem, aes(x = produtoNome, y = contagem, fill = produtoNome)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  labs(y = "Contagem", x = "Produto Nome") +
+  theme_classic() +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    legend.position = "none"))|> 
+  ggplotly()
+
+# Converter para data frame para criar a tabela
+tabela_df <- as.data.frame(tabela_porcentagem)
+
+# Renomear as colunas
+colnames(tabela_df) <- c("Produto Nome", "Contagem", "Porcentagem (%)")
+
+# Criar tabela interativa com paginação
+datatable(
+  tabela_porcentagem,
+  rownames = FALSE,
+  options = list(
+    pageLength = 10,
+    autoWidth = TRUE
+  ),
+  class = 'stripe hover compact',
+  caption = 'Tabela de Frequência por Produto Nome'
+)
+```
+
+## Carteira Descrição
+```{r fig.width=10, fig.height=4}
+tabela_porcentagem <- base %>%
+  group_by(carteiraDescricao) %>%
+  summarise(contagem = n()) %>%
+  mutate(porcentagem = round(contagem / sum(contagem) * 100, 2))
+
+(ggplot(tabela_porcentagem, aes(x = carteiraDescricao, y = contagem, fill = carteiraDescricao)) +
+   geom_bar(stat = "identity") +
+   labs(y = "Contagem", x = "Carteira Descrição") +
+   theme_classic() +
+   theme(axis.text.x = element_blank(),
+         axis.ticks.x = element_blank())) |>
+  ggplotly()
+
+# Converter para data frame para criar a tabela
+tabela_df <- as.data.frame(tabela_porcentagem)
+
+# Renomear as colunas
+colnames(tabela_df) <- c("Carteira Descrição", "Contagem", "Porcentagem (%)")
+
+# Criar a tabela usando flextable
+flextable(tabela_df) %>%
+  width(width = 1.5) %>%
+  bold(part = "header") %>%
+  theme_box() %>%
+  align(align = "center", part = "all")
+```
+
+<!-- ## Faixa de Capital Segurado Previsto -->
+<!-- ```{r fig.width=10, fig.height=4} -->
+<!-- tabela_porcentagem <- base %>% -->
+<!--   group_by(faixaCapitalSeguradoPrevisto) %>% -->
+<!--   summarise(contagem = n()) %>% -->
+<!--   mutate(porcentagem = round(contagem / sum(contagem) * 100, 2)) -->
+
+<!-- (ggplot(tabela_porcentagem, aes(x = faixaCapitalSeguradoPrevisto, y = contagem,  -->
+<!--                                 fill = faixaCapitalSeguradoPrevisto)) + -->
+<!--    geom_bar(stat = "identity") + -->
+<!--    labs(y = "Contagem", x = "Faixa de Capital Segurado Previsto") + -->
+<!--    theme_classic() + -->
+<!--    theme(axis.text.x = element_blank(), -->
+<!--          axis.ticks.x = element_blank())) |> -->
+<!--   ggplotly() -->
+
+<!-- # Converter para data frame para criar a tabela -->
+<!-- tabela_df <- as.data.frame(tabela_porcentagem) -->
+
+<!-- # Renomear as colunas -->
+<!-- colnames(tabela_df) <- c("Faixa de Capital Segurado Previsto", "Contagem", "Porcentagem (%)") -->
+
+<!-- # Criar a tabela usando flextable -->
+<!-- flextable(tabela_df) %>% -->
+<!--   width(width = 1.5) %>% -->
+<!--   bold(part = "header") %>% -->
+<!--   theme_box() %>% -->
+<!--   align(align = "center", part = "all") -->
+<!-- ``` -->
+
+# Persistência {.tabset .tabset-fade .tabset-pills}
+
+## Sexo
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ sexoCliente, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p = ggplot(base) + theme_classic()
+
+p1 = p +
+  geom_step(aes(x = time, y = estimate, color = strata), data = km_surv) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1))
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) +
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
+
+## Categoria do Cliente
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ categoriaCliente, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = p +
+  geom_step(aes(x = time, y = estimate, color = strata), data = km_surv) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1))
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata))  +
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
+
+## Forma de Cobrança
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ formaCobranca, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = p +
+  geom_step(aes(x = time, y = estimate, color = strata), data = km_surv) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1))
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) + 
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
+
+## Periodicidade de Cobrança
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ periodicidadeCobranca, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = p +
+  geom_step(aes(x = time, y = estimate, color = strata), data = km_surv) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1))
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) + 
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
+
+## Cobertura Agrupamento
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ coberturaAgrupamento, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = p +
+  geom_step(aes(x = time, y = estimate, color = strata), data = km_surv) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1))
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) +
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
+
+## Ramo Descrição
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ ramoDescricao, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = p +
+  geom_step(aes(x = time, y = estimate, color = strata), data = km_surv) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1))
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) + 
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
+
+## Produto Nome
+```{r fig.width=8, fig.height=8}
+km = survfit2(Surv(tempo_mes, delta) ~ produtoNome, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = p +
+  geom_step(aes(x = time, y = estimate, color = strata), data = km_surv) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1))
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) +
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE)) |>
+  layout(legend = list(orientation = "h", font = list(size = 10)))
+```
+
+## Carteira Descrição
+```{r fig.width=10, fig.height=6}
+km = survfit2(Surv(tempo_mes, delta) ~ carteiraDescricao, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = p +
+  geom_step(aes(x = time, y = estimate, color = strata), data = km_surv) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1))
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) + 
+  xlab("tempo") +
+  ylab("h(t)") +
+  theme_classic()
+
+subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE))
+```
+
+<!-- ## Faixa de Capital Segurado Previsto -->
+<!-- ```{r fig.width=10, fig.height=6} -->
+<!-- km = survfit2(Surv(tempo_mes, delta) ~ faixaCapitalSeguradoPrevisto, data = base) -->
+
+<!-- km_surv <- tidy_survfit(km, type = "survival") -->
+
+<!-- p1 = p + -->
+<!--   geom_step(aes(x = time, y = estimate, color = strata), data = km_surv) + -->
+<!--   xlab("tempo") + -->
+<!--   ylab("S(t)") + -->
+<!--   ylim(c(0, 1)) -->
+
+<!-- pred_risk <- tibble() -->
+
+<!-- for(cat in km_surv |> select(strata) |> unique() |> pull()) { -->
+<!--   pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |>  -->
+<!--                                              filter(strata == cat) |> -->
+<!--                                              pull(time), km_surv |>  -->
+<!--                                              filter(strata == cat) |>  -->
+<!--                                              pull(estimate), cat)) -->
+<!-- } -->
+
+<!-- pred_risk$strata <- factor(pred_risk$strata, levels = unique(km_surv$strata)) -->
+
+<!-- p1_haz <- ggplot(pred_risk) +  -->
+<!--   geom_line(aes(x = time, y = hazard, color = strata)) +  -->
+<!--   xlab("tempo") + -->
+<!--   ylab("h(t)") + -->
+<!--   theme_classic() -->
+
+<!-- subplot(ggplotly(p1), plotly::style(ggplotly(p1_haz), showlegend = FALSE)) -->
+<!-- ``` -->
+
+# Curvas de Sobrevivência {.tabset .tabset-fade .tabset-pills}
+
+## Sexo
+```{r fig.width=10, fig.height=8}
+km = survfit2(Surv(tempo_mes, delta) ~ sexoCliente, data = base)
+
+ggsurvplot(km, data = base, legend = "none", risk.table = TRUE, 
+           risk.table.height = 0.3, risk.table.y.text = FALSE)
+```
+
+## Categoria do Cliente
+```{r fig.width=10, fig.height=8}
+km = survfit2(Surv(tempo_mes, delta) ~ categoriaCliente, data = base)
+
+ggsurvplot(km, data = base, legend = "none", risk.table = TRUE, 
+           risk.table.height = 0.3, risk.table.y.text = FALSE)
+```
+
+## Forma de Cobrança
+```{r fig.width=10, fig.height=8}
+km = survfit2(Surv(tempo_mes, delta) ~ formaCobranca, data = base)
+
+ggsurvplot(km, data = base, legend = "none", risk.table = TRUE, 
+           risk.table.height = 0.3, risk.table.y.text = FALSE)
+```
+
+## Periodicidade de Cobrança
+```{r fig.width=10, fig.height=8}
+km = survfit2(Surv(tempo_mes, delta) ~ periodicidadeCobranca, data = base)
+
+ggsurvplot(km, data = base, legend = "none", risk.table = TRUE, 
+           risk.table.height = 0.3, risk.table.y.text = FALSE)
+```
+
+## Cobertura Agrupamento
+```{r fig.width=10, fig.height=8}
+km = survfit2(Surv(tempo_mes, delta) ~ coberturaAgrupamento, data = base)
+
+ggsurvplot(km, data = base, legend = "none", risk.table = TRUE, 
+           risk.table.height = 0.3, risk.table.y.text = FALSE)
+```
+
+## Ramo Descrição
+```{r fig.width=10, fig.height=8}
+km = survfit2(Surv(tempo_mes, delta) ~ ramoDescricao, data = base)
+
+ggsurvplot(km, data = base, legend = "none", risk.table = TRUE, 
+           risk.table.height = 0.3, risk.table.y.text = FALSE)
+```
+
+## Carteira Descrição
+```{r fig.width=10, fig.height=8}
+km = survfit2(Surv(tempo_mes, delta) ~ carteiraDescricao, data = base)
+
+ggsurvplot(km, data = base, legend = "none", risk.table = TRUE, 
+           risk.table.height = 0.3, risk.table.y.text = FALSE)
+```
+
+<!-- ## Faixa de Capital Segurado Previsto -->
+<!-- ```{r fig.width=10, fig.height=8} -->
+<!-- km = survfit2(Surv(tempo_mes, delta) ~ faixaCapitalSeguradoPrevisto, data = base) -->
+
+<!-- ggsurvplot(km, data = base, legend = "none", risk.table = TRUE,  -->
+<!--            risk.table.height = 0.3, risk.table.y.text = FALSE) -->
+<!-- ``` -->

@@ -1,0 +1,614 @@
+---
+title: "Capitalização - Resgate"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    highlight: tango
+    fig_width: 5
+    fig_height: 4
+    css: "Estilos/estilos.css"
+---
+
+```{r, include=FALSE}
+
+install.packages(c("tidyverse","data.table","survival","plotly","dplyr","ggpubr",
+                 "flextable","lnmixsurv","ggsurvfit","ggridges","survminer","","arrow",
+                 "bayesplot","posterior","knitr","DT","kableExtra","lares"), repos = "https://cloud.r-project.org")
+
+library(tidyverse)
+library(data.table)
+library(survival)
+library(plotly)
+library(dplyr)
+library(ggpubr)
+library(flextable)
+library(lnmixsurv)
+library(ggsurvfit)
+library(ggridges)
+library(survminer)
+library(arrow)
+library(bayesplot)
+library(posterior)
+library(knitr)
+library(DT)
+library(kableExtra)
+library(lares)
+
+
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, fig.align = 'left', echo=FALSE)
+
+setwd(dirname(rstudioapi::getSourceEditorContext()$path))
+
+base <- read_rds('../Bases/capitalizacao_tratada.rds')
+
+base$categoriaCliente[base$categoriaCliente == ""] <- "sem categoriaCliente"
+
+p = ggplot(base) + theme_classic()
+
+# Função
+tx.emp <- function(t, s, cat) {
+  seq_time <- 1:length(t)
+  
+  aux <- NULL
+  
+  for (i in 2:length(seq_time)) {
+    aux <- c(aux, 
+             (s[seq_time[i - 1]] - s[seq_time[i]]) /
+               ((t[seq_time[i]] - t[seq_time[i - 1]]) * s[seq_time[i - 1]]))
+  }
+  
+  return(bind_rows(tibble(time = 0, hazard = 0, strata = cat),
+                   tibble(time = t[-1], hazard = aux,
+                          strata = cat)))
+}
+```
+
+
+# Análise Covariáveis {.tabset .tabset-fade .tabset-pills}
+
+## Sexo
+```{r fig.width=10, fig.height=4}
+
+base <- base %>%
+  mutate(sexoCliente = if_else(sexoCliente == "", "NÃO INFORMADO", sexoCliente))
+
+
+base_resgate <- base |> filter(status == "Resgate")
+
+(p + geom_bar(aes(x = sexoCliente, fill = sexoCliente), data = base_resgate)) |>
+  ggplotly()
+
+# Tabela de frequências (% sobre total de resgates por categoria)
+table <- table(base_resgate$sexoCliente) |> as.data.frame()
+colnames(table) <- c("Categoria", "Freq")
+
+table$Perc <- round((table$Freq / sum(table$Freq)) * 100, 2)
+
+table |>
+  flextable() |>
+  width(width = 1.3) |>
+  bold(part = "header")
+
+```
+
+## Categoria
+```{r fig.width=10, fig.height=4}
+(p + geom_bar(aes(x = categoriaCliente, fill = categoriaCliente), data = base_resgate)) |>
+  ggplotly()
+
+# Tabela de frequências (% sobre total de resgates por categoria)
+table <- table(base_resgate$categoriaCliente) |> as.data.frame()
+colnames(table) <- c("Categoria", "Freq")
+
+table$Perc <- round((table$Freq / sum(table$Freq)) * 100, 2)
+
+table |>
+  flextable() |>
+  width(width = 1.3) |>
+  bold(part = "header")
+```
+
+## Forma de Cobrança
+```{r fig.width=10, fig.height=4}
+(p + geom_bar(aes(x = formaCobranca, fill = formaCobranca), data = base_resgate)) |>
+  ggplotly()
+
+# Tabela de frequências (% sobre total de resgates por categoria)
+table <- table(base_resgate$formaCobranca) |> as.data.frame()
+colnames(table) <- c("Categoria", "Freq")
+
+table$Perc <- round((table$Freq / sum(table$Freq)) * 100, 2)
+
+table |>
+  flextable() |>
+  width(width = 1.3) |>
+  bold(part = "header")
+```
+
+## Periodicidade de Cobrança
+```{r fig.width=10, fig.height=4}
+(p + geom_bar(aes(x = periodicidadeCobranca, fill = periodicidadeCobranca), data = base_resgate)) |>
+  ggplotly()
+
+# Tabela de frequências (% sobre total de resgates por categoria)
+table <- table(base_resgate$periodicidadeCobranca) |> as.data.frame()
+colnames(table) <- c("Categoria", "Freq")
+
+table$Perc <- round((table$Freq / sum(table$Freq)) * 100, 2)
+
+table |>
+  flextable() |>
+  width(width = 1.3) |>
+  bold(part = "header")
+```
+
+## Cobertura
+```{r fig.width=10, fig.height=4}
+(p + geom_bar(aes(x = tipoCobertura, fill = tipoCobertura), data = base_resgate)) |>
+  ggplotly()
+
+# Tabela de frequências (% sobre total de resgates por categoria)
+table <- table(base_resgate$tipoCobertura) |> as.data.frame()
+colnames(table) <- c("Categoria", "Freq")
+
+table$Perc <- round((table$Freq / sum(table$Freq)) * 100, 2)
+
+table |>
+  flextable() |>
+  width(width = 1.3) |>
+  bold(part = "header")
+```
+
+## Agrupamento
+```{r fig.width=10, fig.height=4}
+
+(p + geom_bar(aes(x = coberturaAgrupamento, fill = coberturaAgrupamento), data = base_resgate)) |>
+  ggplotly()
+
+# Tabela de frequências (% sobre total de resgates por categoria)
+table <- table(base_resgate$coberturaAgrupamento) |> as.data.frame()
+colnames(table) <- c("Categoria", "Freq")
+
+table$Perc <- round((table$Freq / sum(table$Freq)) * 100, 2)
+
+table |>
+  flextable() |>
+  width(width = 1.3) |>
+  bold(part = "header")
+```
+
+# Persistência por Covariáveis {.tabset .tabset-fade .tabset-pills}
+
+## Sexo
+```{r fig.width=10, fig.height=6}
+km_surv <- survfit2(Surv(tempo_mes, delta1) ~ sexoCliente,
+                    data = base) |> 
+  tidy_survfit()
+
+g1 <- ggplot() + 
+  geom_step(aes(x = time, y = estimate, color = strata), data = km_surv) + 
+  theme_bw() 
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+g1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) + 
+  theme_bw()
+
+subplot(ggplotly(g1), plotly::style(ggplotly(g1_haz), showlegend = F))
+```
+
+## Categoria do Cliente
+```{r fig.width=10, fig.height=6}
+km_surv <- survfit2(Surv(tempo_mes, delta1) ~ categoriaCliente,
+                    data = base) |> 
+  tidy_survfit()
+
+g1 <- ggplot() + 
+  geom_step(aes(x = time, y = estimate, color = strata), data = km_surv) + 
+  theme_bw() 
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+g1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) + 
+  theme_bw()
+
+subplot(ggplotly(g1), plotly::style(ggplotly(g1_haz), showlegend = F))
+```
+
+## Forma de Cobrança
+```{r fig.width=10, fig.height=6}
+km_surv <- survfit2(Surv(tempo_mes, delta1) ~ formaCobranca,
+                    data = base) |> 
+  tidy_survfit()
+
+g1 <- ggplot() + 
+  geom_step(aes(x = time, y = estimate, color = strata), data = km_surv) + 
+  theme_bw() 
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+g1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) + 
+  theme_bw()
+
+subplot(ggplotly(g1), plotly::style(ggplotly(g1_haz), showlegend = F))
+```
+
+## Periodicidade de Cobrança
+```{r fig.width=10, fig.height=6}
+km_surv <- survfit2(Surv(tempo_mes, delta1) ~ periodicidadeCobranca,
+                    data = base) |> 
+  tidy_survfit()
+
+g1 <- ggplot() + 
+  geom_step(aes(x = time, y = estimate, color = strata), data = km_surv) + 
+  theme_bw() 
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+g1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) + 
+  theme_bw()
+
+subplot(ggplotly(g1), plotly::style(ggplotly(g1_haz), showlegend = F))
+```
+
+## Tipo de Cobertura
+```{r fig.width=10, fig.height=6}
+km_surv <- survfit2(Surv(tempo_mes, delta1) ~ tipoCobertura,
+                    data = base) |> 
+  tidy_survfit()
+
+g1 <- ggplot() + 
+  geom_step(aes(x = time, y = estimate, color = strata), data = km_surv) + 
+  theme_bw() 
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+g1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) + 
+  theme_bw()
+
+subplot(ggplotly(g1), plotly::style(ggplotly(g1_haz), showlegend = F))
+```
+
+## Cobertura Agrupamento
+```{r fig.width=10, fig.height=6}
+km_surv <- survfit2(Surv(tempo_mes, delta1) ~ coberturaAgrupamento,
+                    data = base) |> 
+  tidy_survfit()
+
+g1 <- ggplot() + 
+  geom_step(aes(x = time, y = estimate, color = strata), data = km_surv) + 
+  theme_bw() 
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+g1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) + 
+  theme_bw()
+
+subplot(ggplotly(g1), plotly::style(ggplotly(g1_haz), showlegend = F))
+```
+
+# Resgate
+
+## Covariáveis - Resgate {.tabset .tabset-fade .tabset-pills}
+
+### Categoria do Cliente 
+```{r fig.width=10, fig.height=6}
+# Bases
+base_resgate1 <- read_parquet('../Bases/base_resgate_clusters_variaveis.parquet')
+base_resgate2 <- read_parquet('../Bases/base_resgate_clusters.parquet') # base com os agrupamentos criados
+
+km_surv <- survfit2(Surv(tempo_mes, delta1) ~ clusterCC,
+                    data = base_resgate1) |> 
+  tidy_survfit()
+
+g1 <- ggplot(km_surv) +
+   geom_step(aes(x = time, y = estimate, color = strata)) +
+   theme_bw()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+g1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) + 
+  theme_bw()
+
+subplot(ggplotly(g1), plotly::style(ggplotly(g1_haz), showlegend = F))
+```
+
+```{r}
+tabela_contingencia <- table(base_resgate1$categoriaCliente, base_resgate1$clusterCC)
+
+df_tabela_contingencia <- as.data.frame(tabela_contingencia)
+
+colnames(df_tabela_contingencia) <- c("categoriaCliente", "clusterCC", "Frequência")
+
+# Calculando porcentagens
+df_tabela_contingencia <- df_tabela_contingencia |>
+  mutate(Porcentagem = sprintf("%.2f%%", (Frequência / sum(Frequência)) * 100)) |>
+  filter(Frequência > 0)
+
+# Criando a tabela interativa com DT
+DT::datatable(df_tabela_contingencia,
+          rownames = FALSE,
+          class = 'cell-border stripe hover',
+          options = list(paging = F,
+                         searching = F,
+                         info = F))
+```
+
+### Forma de Cobrança
+  
+```{r fig.width=10, fig.height=6}
+km_surv <- survfit2(Surv(tempo_mes, delta1) ~ clusterFC,
+                    data = base_resgate1) |> 
+  tidy_survfit()
+
+g2 <- ggplot(km_surv) +
+   geom_step(aes(x = time, y = estimate, color = strata)) +
+   theme_bw() +
+   labs(color = 'Cluster LPA',
+        title = 'LPA (1º modelo)')
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+g2_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) + 
+  theme_bw()
+
+subplot(ggplotly(g2), plotly::style(ggplotly(g2_haz), showlegend = F))
+```
+
+```{r}
+tabela_contingencia <- table(base_resgate1$formaCobranca, base_resgate1$clusterFC)
+
+df_tabela_contingencia <- as.data.frame(tabela_contingencia)
+
+colnames(df_tabela_contingencia) <- c("formaCobranca", "clusterFC", "Frequência")
+
+df_tabela_contingencia <- df_tabela_contingencia |>
+  mutate(Porcentagem = sprintf("%.2f%%", (Frequência / sum(Frequência)) * 100)) |>
+  filter(Frequência > 0)
+
+DT::datatable(df_tabela_contingencia,
+          rownames = FALSE,
+          class = 'cell-border stripe hover',
+          options = list(
+            paging = F,
+            searching = F,
+            info = F))
+```
+
+Estou usando essa clusterização, com 3 clusters.
+```{r fig.width=10, fig.height=6}
+km_surv <- survfit2(Surv(tempo_mes, delta1) ~ clusterFC3,
+                    data = base_resgate1) |> 
+  tidy_survfit()
+
+g2 <- ggplot(km_surv) +
+   geom_step(aes(x = time, y = estimate, color = strata)) +
+   theme_bw() +
+   labs(color = 'Cluster LPA',
+        title = 'LPA (2º modelo)')
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+g2_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) + 
+  theme_bw()
+
+subplot(ggplotly(g2), plotly::style(ggplotly(g2_haz), showlegend = F))
+```
+
+```{r}
+tabela_contingencia <- table(base_resgate1$formaCobranca, base_resgate1$clusterFC3)
+
+# Convertendo a tabela de contingência em um data frame
+df_tabela_contingencia <- as.data.frame(tabela_contingencia)
+
+# Renomeando as colunas do data frame para algo mais intuitivo
+colnames(df_tabela_contingencia) <- c("formaCobranca", "clusterFC3", "Frequência")
+
+# Calculando porcentagens
+df_tabela_contingencia <- df_tabela_contingencia |>
+  mutate(Porcentagem = sprintf("%.2f%%", (Frequência / sum(Frequência)) * 100)) |>
+  filter(Frequência > 0)
+
+# Criando a tabela interativa com DT
+DT::datatable(df_tabela_contingencia,
+          rownames = FALSE,
+          class = 'cell-border stripe hover',
+          options = list(paging = F,
+                         searching = F,
+                         info = F))
+```
+
+### Tipo de Cobertura
+```{r fig.width=10, fig.height=6}
+km_surv <- survfit2(Surv(tempo_mes, delta1) ~ clusterTC,
+                    data = base_resgate1) |> 
+  tidy_survfit()
+
+g3 <- ggplot(km_surv) +
+   geom_step(aes(x = time, y = estimate, color = strata)) +
+   theme_bw()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+g3_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) + 
+  theme_bw()
+
+subplot(ggplotly(g3), plotly::style(ggplotly(g3_haz), showlegend = F))
+```
+
+```{r}
+tabela_contingencia <- table(base_resgate1$tipoCobertura, base_resgate1$clusterTC)
+
+df_tabela_contingencia <- as.data.frame(tabela_contingencia)
+
+colnames(df_tabela_contingencia) <- c("tipoCobertura", "clusterTC", "Frequência")
+
+df_tabela_contingencia <- df_tabela_contingencia |>
+  mutate(Porcentagem = sprintf("%.2f%%", (Frequência / sum(Frequência)) * 100)) |>
+  filter(Frequência > 0)
+
+DT::datatable(df_tabela_contingencia,
+          rownames = FALSE,
+          class = 'cell-border stripe hover',
+          options = list(
+            paging = F,
+            searching = F,
+            info = F))
+```
+
+## Resgate
+```{r fig.width=10, fig.height=6}
+km_surv <- survfit2(Surv(tempo_mes, delta1) ~ clusterCC + clusterFC3 + clusterTC,
+                    data = base_resgate1) |> 
+  tidy_survfit()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+p_sob <- ggplot(km_surv) + 
+  geom_step(aes(x = time, y = estimate, color = strata)) +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24))
+
+p_risco <- ggplot(pred_risk) +
+  geom_line(aes(x = time, y = hazard, color = strata)) +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 168, 24))
+
+subplot(ggplotly(p_sob), plotly::style(ggplotly(p_risco), showlegend = FALSE))
+```
+
+```{r}
+base_resgate1 <- base_resgate1 |>
+  mutate(combinação = paste0(clusterCC, '-', clusterFC3, '-', clusterTC))
+
+base_resgate1$combinação <- as.factor(base_resgate1$combinação)
+
+df_tabela <- as.data.frame(table(base_resgate1$combinação))
+
+# Renomeando as colunas do data frame para algo mais intuitivo
+colnames(df_tabela) <- c("combinação", "Frequência")
+
+# Calculando porcentagens
+df_tabela <- df_tabela %>%
+  mutate(Porcentagem = sprintf("%.2f%%", (Frequência / sum(Frequência)) * 100)) %>%
+  filter(Frequência > 0)
+
+# Criando a tabela interativa com DT
+DT::datatable(df_tabela,
+          rownames = FALSE,
+          class = 'cell-border stripe hover',
+          options = list(paging = F,
+                         searching = F,
+                         info = F))
+```
+
+## Curva de Sobrevivência
+```{r fig.width=9, fig.height=10}
+km <- survfit2(Surv(tempo_mes, delta1) ~ clusterCC + clusterFC3 + clusterTC,
+                    data = base_resgate1)
+
+ggsurvplot(km, data = base_resgate1, risk.table = TRUE, legend = 'none', 
+           break.x.by = 24, risk.table.height = 0.4, ggtheme = theme_bw(), risk.table.y.text.col = T, risk.table.y.text = T, xlim = c(0, 170))
+```
+
+
