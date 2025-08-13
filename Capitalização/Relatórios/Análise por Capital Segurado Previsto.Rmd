@@ -1,0 +1,641 @@
+---
+title: "Análise por Capital Segurado Previsto"
+author: "João Francisco"
+date: "2025-08-13"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    highlight: tango
+    fig_width: 5
+    fig_height: 4
+    css: "Estilos/estilos.css"
+---
+
+```{r, include=FALSE}
+# Carregando os pacotes
+library(dplyr)
+library(arrow)
+library(ggplot2)
+library(plotly)
+library(tidyr)
+library(purrr)
+library(ggsurvfit)
+library(readr)
+
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo = FALSE, fig.align = 'left')
+
+# Carregando a base de dados
+base <- read_rds('../Bases/capitalizacao_tratada.rds')
+
+# Persistência por capitalSeguradoPrevisto
+calcular_persistencia <- function(dados, var_grupo) {
+  grupos <- unique(pull(dados, {{ var_grupo }}))
+  
+  # Para cada grupo, faz o cálculo e completa só até o max do grupo
+  resultados <- map_dfr(grupos, function(g) {
+    dados_grupo <- dados %>% filter((!!ensym(var_grupo)) == g)
+    max_tempo <- max(dados_grupo$tempo_mes)
+    tempo_range <- 0:max_tempo
+    
+    dados_grupo %>%
+      group_by({{ var_grupo }}, tempo_mes) %>%
+      summarise(
+        Total = sum(capitalSeguradoPrevisto),
+        Cancelados = sum(capitalSeguradoPrevisto[delta == 1]),
+        .groups = "drop") %>%
+      ungroup() %>%
+     complete(
+       tempo_mes = tempo_range,
+       fill = list(Total = 0, Cancelados = 0)) %>%
+      
+mutate({{ var_grupo }} := g) %>%
+      mutate(
+        Expostos = rev(cumsum(rev(Total))),
+        Desistencia = ifelse(Expostos == 0, 0, Cancelados / Expostos),
+        Persistencia = cumprod(1 - Desistencia),
+        Persistencia = ifelse(tempo_mes == 0, 1, Persistencia))})
+  
+  resultados
+}
+
+
+# Função
+tx.emp <- function(t, s, cat) {
+  seq_time <- 1:length(t)
+  
+  aux <- NULL
+  
+  for (i in 2:length(seq_time)) {
+    aux <- c(aux, 
+             (s[seq_time[i - 1]] - s[seq_time[i]]) /
+               ((t[seq_time[i]] - t[seq_time[i - 1]]) * s[seq_time[i - 1]]))
+  }
+  
+  return(bind_rows(tibble(time = 0, hazard = 0, strata = cat),
+                   tibble(time = t[-1], hazard = aux,
+                          strata = cat)))
+}
+```
+
+# Persistência {.tabset .tabset-fade .tabset-pills}
+
+## Sexo
+```{r fig.width=10, fig.height=7}
+
+base <- base %>%
+  mutate(sexoCliente = if_else(sexoCliente == "", "NÃO INFORMADO", sexoCliente))
+
+# Usual
+km = survfit2(Surv(tempo_mes, delta) ~ sexoCliente, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, color = strata)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) +
+  xlab("tempo") +
+  ylab("h(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+# Persistência por capitalSeguradoPrevisto
+resultado_sexoCliente <- calcular_persistencia(base, sexoCliente)
+
+p2 = ggplot(resultado_sexoCliente) +
+  geom_step(aes(x = tempo_mes, y = Persistencia, color = sexoCliente)) +
+  xlab("tempo") +
+  ylab("Persistência") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+p2_haz <- ggplot(resultado_sexoCliente) + 
+  geom_line(aes(x = tempo_mes, y = Desistencia, color = sexoCliente))  +
+  xlab("tempo") +
+  ylab("Desistência") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+# Transformar os ggplots em plotly
+p1_plotly <- ggplotly(p1)
+p1_haz_plotly <- ggplotly(p1_haz) %>% style(showlegend = FALSE)
+
+p2_plotly <- ggplotly(p2) %>% style(showlegend = FALSE)
+p2_haz_plotly <- ggplotly(p2_haz) %>% style(showlegend = FALSE)
+
+# Criar um subplot com 2 linhas, 2 colunas
+subplot(
+  p1_plotly, p1_haz_plotly,
+  p2_plotly, p2_haz_plotly,
+  nrows = 2,
+  shareX = TRUE,
+  shareY = FALSE,
+  titleX = TRUE,
+  titleY = TRUE)
+```
+
+## Categoria do Cliente
+```{r fig.width=10, fig.height=7}
+
+base <- base %>%
+  mutate(categoriaCliente = if_else(categoriaCliente == "", "NÃO INFORMADO", categoriaCliente))
+
+# Usual
+km = survfit2(Surv(tempo_mes, delta) ~ categoriaCliente, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, color = strata)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) +
+  xlab("tempo") +
+  ylab("h(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+# Persistência por capitalSeguradoPrevisto
+resultado_categoriaCliente <- calcular_persistencia(base, categoriaCliente)
+
+p2 = ggplot(resultado_categoriaCliente) +
+  geom_step(aes(x = tempo_mes, y = Persistencia, color = categoriaCliente)) +
+  xlab("tempo") +
+  ylab("Persistência") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+p2_haz <- ggplot(resultado_categoriaCliente) + 
+  geom_line(aes(x = tempo_mes, y = Desistencia, color = categoriaCliente))  +
+  xlab("tempo") +
+  ylab("Desistência") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+# Transformar os ggplots em plotly
+p1_plotly <- ggplotly(p1)
+p1_haz_plotly <- ggplotly(p1_haz) %>% style(showlegend = FALSE)
+
+p2_plotly <- ggplotly(p2) %>% style(showlegend = FALSE)
+p2_haz_plotly <- ggplotly(p2_haz) %>% style(showlegend = FALSE)
+
+# Criar um subplot com 2 linhas, 2 colunas
+subplot(
+  p1_plotly, p1_haz_plotly,
+  p2_plotly, p2_haz_plotly,
+  nrows = 2,
+  shareX = TRUE,
+  shareY = FALSE,
+  titleX = TRUE,
+  titleY = TRUE)
+```
+
+## Forma de Cobrança
+```{r fig.width=10, fig.height=7}
+# Usual
+km = survfit2(Surv(tempo_mes, delta) ~ formaCobranca, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, color = strata)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) +
+  xlab("tempo") +
+  ylab("h(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+# Persistência por capitalSeguradoPrevisto
+resultado_formaCobranca <- calcular_persistencia(base, formaCobranca)
+
+p2 = ggplot(resultado_formaCobranca) +
+  geom_step(aes(x = tempo_mes, y = Persistencia, color = formaCobranca)) +
+  xlab("tempo") +
+  ylab("Persistência") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+p2_haz <- ggplot(resultado_formaCobranca) + 
+  geom_line(aes(x = tempo_mes, y = Desistencia, color = formaCobranca))  +
+  xlab("tempo") +
+  ylab("Desistência") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+# Transformar os ggplots em plotly
+p1_plotly <- ggplotly(p1)
+p1_haz_plotly <- ggplotly(p1_haz) %>% style(showlegend = FALSE)
+
+p2_plotly <- ggplotly(p2) %>% style(showlegend = FALSE)
+p2_haz_plotly <- ggplotly(p2_haz) %>% style(showlegend = FALSE)
+
+# Criar um subplot com 2 linhas, 2 colunas
+subplot(
+  p1_plotly, p1_haz_plotly,
+  p2_plotly, p2_haz_plotly,
+  nrows = 2,
+  shareX = TRUE,
+  shareY = FALSE,
+  titleX = TRUE,
+  titleY = TRUE)
+```
+
+## Periodicidade de Cobrança
+```{r fig.width=10, fig.height=7}
+# Usual
+km = survfit2(Surv(tempo_mes, delta) ~ periodicidadeCobranca, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, color = strata)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) +
+  xlab("tempo") +
+  ylab("h(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+# Persistência por capitalSeguradoPrevisto
+resultado_periodicidadeCobranca <- calcular_persistencia(base, periodicidadeCobranca)
+
+p2 = ggplot(resultado_periodicidadeCobranca) +
+  geom_step(aes(x = tempo_mes, y = Persistencia, color = periodicidadeCobranca)) +
+  xlab("tempo") +
+  ylab("Persistência") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+p2_haz <- ggplot(resultado_periodicidadeCobranca) + 
+  geom_line(aes(x = tempo_mes, y = Desistencia, color = periodicidadeCobranca))  +
+  xlab("tempo") +
+  ylab("Desistência") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+# Transformar os ggplots em plotly
+p1_plotly <- ggplotly(p1)
+p1_haz_plotly <- ggplotly(p1_haz) %>% style(showlegend = FALSE)
+
+p2_plotly <- ggplotly(p2) %>% style(showlegend = FALSE)
+p2_haz_plotly <- ggplotly(p2_haz) %>% style(showlegend = FALSE)
+
+# Criar um subplot com 2 linhas, 2 colunas
+subplot(
+  p1_plotly, p1_haz_plotly,
+  p2_plotly, p2_haz_plotly,
+  nrows = 2,
+  shareX = TRUE,
+  shareY = FALSE,
+  titleX = TRUE,
+  titleY = TRUE)
+```
+
+## Cobertura Agrupamento
+```{r fig.width=10, fig.height=7}
+# Usual
+km = survfit2(Surv(tempo_mes, delta) ~ coberturaAgrupamento, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, color = strata)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) +
+  xlab("tempo") +
+  ylab("h(t)") +
+  ylim(c(0, 0.5)) +
+  theme_classic()
+
+# Persistência por capitalSeguradoPrevisto
+resultado_coberturaAgrupamento <- calcular_persistencia(base, coberturaAgrupamento)
+
+p2 = ggplot(resultado_coberturaAgrupamento) +
+  geom_step(aes(x = tempo_mes, y = Persistencia, color = coberturaAgrupamento)) +
+  xlab("tempo") +
+  ylab("Persistência") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+p2_haz <- ggplot(resultado_coberturaAgrupamento) + 
+  geom_line(aes(x = tempo_mes, y = Desistencia, color = coberturaAgrupamento))  +
+  xlab("tempo") +
+  ylab("Desistência") +
+  ylim(c(0, 0.5)) +
+  theme_classic()
+
+# Transformar os ggplots em plotly
+p1_plotly <- ggplotly(p1)
+p1_haz_plotly <- ggplotly(p1_haz) %>% style(showlegend = FALSE)
+
+p2_plotly <- ggplotly(p2) %>% style(showlegend = FALSE)
+p2_haz_plotly <- ggplotly(p2_haz) %>% style(showlegend = FALSE)
+
+# Criar um subplot com 2 linhas, 2 colunas
+subplot(
+  p1_plotly, p1_haz_plotly,
+  p2_plotly, p2_haz_plotly,
+  nrows = 2,
+  shareX = TRUE,
+  shareY = FALSE,
+  titleX = TRUE,
+  titleY = TRUE)
+```
+
+## Ramo Descrição
+```{r fig.width=10, fig.height=7}
+# Usual
+km = survfit2(Surv(tempo_mes, delta) ~ ramoDescricao, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, color = strata)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) +
+  xlab("tempo") +
+  ylab("h(t)") +
+  ylim(c(0, 0.75)) +
+  theme_classic()
+
+# Persistência por capitalSeguradoPrevisto
+resultado_ramoDescricao <- calcular_persistencia(base, ramoDescricao)
+
+p2 = ggplot(resultado_ramoDescricao) +
+  geom_step(aes(x = tempo_mes, y = Persistencia, color = ramoDescricao)) +
+  xlab("tempo") +
+  ylab("Persistência") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+p2_haz <- ggplot(resultado_ramoDescricao) + 
+  geom_line(aes(x = tempo_mes, y = Desistencia, color = ramoDescricao))  +
+  xlab("tempo") +
+  ylab("Desistência") +
+  ylim(c(0, 0.75)) +
+  theme_classic()
+
+# Transformar os ggplots em plotly
+p1_plotly <- ggplotly(p1)
+p1_haz_plotly <- ggplotly(p1_haz) %>% style(showlegend = FALSE)
+
+p2_plotly <- ggplotly(p2) %>% style(showlegend = FALSE)
+p2_haz_plotly <- ggplotly(p2_haz) %>% style(showlegend = FALSE)
+
+# Criar um subplot com 2 linhas, 2 colunas
+subplot(
+  p1_plotly, p1_haz_plotly,
+  p2_plotly, p2_haz_plotly,
+  nrows = 2,
+  shareX = TRUE,
+  shareY = FALSE,
+  titleX = TRUE,
+  titleY = TRUE)
+```
+
+## Produto Nome
+```{r fig.width=9, fig.height=9}
+# Usual
+km = survfit2(Surv(tempo_mes, delta) ~ produtoNome, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, color = strata)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) +
+  xlab("tempo") +
+  ylab("h(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+# Persistência por capitalSeguradoPrevisto
+resultado_produtoNome <- calcular_persistencia(base, produtoNome)
+
+p2 = ggplot(resultado_produtoNome) +
+  geom_step(aes(x = tempo_mes, y = Persistencia, color = produtoNome)) +
+  xlab("tempo") +
+  ylab("Persistência") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+p2_haz <- ggplot(resultado_produtoNome) + 
+  geom_line(aes(x = tempo_mes, y = Desistencia, color = produtoNome))  +
+  xlab("tempo") +
+  ylab("Desistência") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+# Transformar os ggplots em plotly
+p1_plotly <- ggplotly(p1)
+p1_haz_plotly <- ggplotly(p1_haz) %>% style(showlegend = FALSE)
+
+p2_plotly <- ggplotly(p2) %>% style(showlegend = FALSE)
+p2_haz_plotly <- ggplotly(p2_haz) %>% style(showlegend = FALSE)
+
+# Criar um subplot com 2 linhas, 2 colunas
+subplot(
+  p1_plotly, p1_haz_plotly,
+  p2_plotly, p2_haz_plotly,
+  nrows = 2,
+  shareX = TRUE,
+  shareY = FALSE,
+  titleX = TRUE,
+  titleY = TRUE) %>% 
+  layout(legend = list(
+    orientation = "h",
+    x = 0.5,
+    xanchor = "center",
+    y = -0.2,
+    font = list(size = 10))
+)
+```
+
+## Carteira Descrição
+```{r fig.width=10, fig.height=7}
+# Usual
+km = survfit2(Surv(tempo_mes, delta) ~ carteiraDescricao, data = base)
+
+km_surv <- tidy_survfit(km, type = "survival")
+
+p1 = ggplot(km_surv) +
+  geom_step(aes(x = time, y = estimate, color = strata)) +
+  xlab("tempo") +
+  ylab("S(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+pred_risk <- tibble()
+
+for(cat in km_surv |> select(strata) |> unique() |> pull()) {
+  pred_risk <- bind_rows(pred_risk, tx.emp(km_surv |> 
+                                             filter(strata == cat) |>
+                                             pull(time), km_surv |> 
+                                             filter(strata == cat) |> 
+                                             pull(estimate), cat))
+}
+
+pred_risk$strata <- factor(pred_risk$strata)
+
+p1_haz <- ggplot(pred_risk) + 
+  geom_line(aes(x = time, y = hazard, color = strata)) +
+  xlab("tempo") +
+  ylab("h(t)") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+# Persistência por capitalSeguradoPrevisto
+resultado_carteiraDescricao <- calcular_persistencia(base, carteiraDescricao)
+
+p2 = ggplot(resultado_carteiraDescricao) +
+  geom_step(aes(x = tempo_mes, y = Persistencia, color = carteiraDescricao)) +
+  xlab("tempo") +
+  ylab("Persistência") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+p2_haz <- ggplot(resultado_carteiraDescricao) + 
+  geom_line(aes(x = tempo_mes, y = Desistencia, color = carteiraDescricao))  +
+  xlab("tempo") +
+  ylab("Desistência") +
+  ylim(c(0, 1)) +
+  theme_classic()
+
+# Transformar os ggplots em plotly
+p1_plotly <- ggplotly(p1)
+p1_haz_plotly <- ggplotly(p1_haz) %>% style(showlegend = FALSE)
+
+p2_plotly <- ggplotly(p2) %>% style(showlegend = FALSE)
+p2_haz_plotly <- ggplotly(p2_haz) %>% style(showlegend = FALSE)
+
+# Criar um subplot com 2 linhas, 2 colunas
+subplot(
+  p1_plotly, p1_haz_plotly,
+  p2_plotly, p2_haz_plotly,
+  nrows = 2,
+  shareX = TRUE,
+  shareY = FALSE,
+  titleX = TRUE,
+  titleY = TRUE)
+```
