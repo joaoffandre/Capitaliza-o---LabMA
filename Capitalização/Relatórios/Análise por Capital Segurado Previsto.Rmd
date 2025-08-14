@@ -29,6 +29,8 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo = FALSE, fig.align 
 # Carregando a base de dados
 base <- read_rds('../Bases/capitalizacao_tratada.rds')
 
+base <- base %>% filter(capitalSeguradoPrevisto != 0)
+
 # Persistência por capitalSeguradoPrevisto
 calcular_persistencia <- function(dados, var_grupo) {
   grupos <- unique(pull(dados, {{ var_grupo }}))
